@@ -1,10 +1,25 @@
 #!/usr/bin/env node
-// Roster CLI — query your team's work via your ROSTER_TOKEN.
-//   roster stats | team | overdue | workload | active | comments
-//   roster search "<text>"   roster card <id>   roster help
-import { callRoster, QUERIES } from './lib/client.mjs'
+// Brello CLI — query your team's work.
+//   brello login <token>   (one time)   then:
+//   brello stats | team | overdue | workload | active | leaves
+//   brello comments | reactions | search "<text>" | card <id> | shoots | help
+import { callRoster, QUERIES, saveToken, clearToken, getToken } from './lib/client.mjs'
 
 const [, , cmd, ...rest] = process.argv
+
+// ── auth: interactive, prompts for the token + a little terminal theatre ──
+if (cmd === 'auth') { const { runAuth } = await import('./lib/auth.mjs'); await runAuth(); process.exit(0) }
+
+// ── login / logout: save the token once so you never re-export it ──
+if (cmd === 'login') {
+  const t = (rest[0] || '').trim()
+  if (!t) { console.error('Paste your token:  brello login <token from your admin>'); process.exit(1) }
+  saveToken(t)
+  console.log('✓ Token saved. Try:  brello stats')
+  process.exit(0)
+}
+if (cmd === 'logout') { clearToken(); console.log('✓ Token removed.'); process.exit(0) }
+if (cmd === 'whoami') { console.log(getToken() ? '✓ A token is set.' : '✗ No token. Run: brello auth'); process.exit(0) }
 
 // command -> { q: query name, arg: hint, admin: bool }
 const COMMANDS = {
@@ -13,9 +28,15 @@ const COMMANDS = {
   overdue:     { q: 'overdue' },
   workload:    { q: 'workload' },
   active:      { q: 'active' },
+  leaves:      { q: 'leaves' },
   comments:    { q: 'comments' },
+  reactions:   { q: 'reactions' },
+  activity:    { q: 'activity' },
   search:      { q: 'search', arg: '"<text>"' },
   card:        { q: 'card', arg: '<id>' },
+  stages:      { q: 'stages' },
+  departments: { q: 'departments' },
+  shoots:      { q: 'shoots' },
   'ps-issues': { q: 'ps_issues', admin: true },
   audit:       { q: 'audit', admin: true },
 }
@@ -39,13 +60,13 @@ function printObject(o) {
 }
 
 function help() {
-  console.log('\nRoster CLI\n')
+  console.log('\nBrello CLI\n')
   for (const [c, def] of Object.entries(COMMANDS)) {
     const label = (c + (def.arg ? ' ' + def.arg : '')).padEnd(20)
-    console.log('  roster ' + label + (QUERIES[def.q]?.desc || '') + (def.admin ? '  (admin only)' : ''))
+    console.log('  brello ' + label + (QUERIES[def.q]?.desc || '') + (def.admin ? '  (admin only)' : ''))
   }
-  console.log('\n  First set your token:  export ROSTER_TOKEN=<token from your admin>')
-  console.log('  Then try:             roster stats\n')
+  console.log('\n  First, sign in:  brello auth   (paste the token your admin gave you)')
+  console.log('  Then try:        brello stats\n')
 }
 
 if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') { help(); process.exit(0) }
@@ -55,11 +76,11 @@ if (!def) { console.error(`I don't know "${cmd}".`); help(); process.exit(1) }
 const params = {}
 if (def.q === 'search') {
   params.q = rest.join(' ').trim()
-  if (!params.q) { console.error('Add what to search for, e.g.   roster search "reel"'); process.exit(1) }
+  if (!params.q) { console.error('Add what to search for, e.g.   brello search "reel"'); process.exit(1) }
 }
 if (def.q === 'card') {
   params.id = (rest[0] || '').trim()
-  if (!params.id) { console.error('Add a card id (first 8 chars are fine), e.g.   roster card 1c11685c'); process.exit(1) }
+  if (!params.id) { console.error('Add a card id (first 8 chars are fine), e.g.   brello card 1c11685c'); process.exit(1) }
 }
 
 try {
@@ -68,10 +89,10 @@ try {
   if (Array.isArray(r.data)) table(r.data)
   else printObject(r.data)
   if (r.note) console.log('\n  note: ' + r.note)
-  console.log('\n  (run `roster help` to see everything you can ask)\n')
+  console.log('\n  (run `brello help` to see everything you can ask)\n')
 } catch (e) {
   const m = e.message || String(e)
-  if (/ROSTER_TOKEN/.test(m)) console.error('✖ No token set. Ask your admin for your token, then run:  export ROSTER_TOKEN=<token>')
+  if (/NO_TOKEN/.test(m)) console.error('✖ No token yet. Get one from your admin, then run:  brello auth')
   else if (/invalid or expired/.test(m)) console.error('✖ Your token is invalid or has expired — ask your admin for a fresh one.')
   else if (/admin-scope only/.test(m)) console.error('✖ That one is admin-only — your token does not have access.')
   else console.error('✖ ' + m)

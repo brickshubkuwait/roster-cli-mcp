@@ -1,12 +1,30 @@
 {
-  "name": "roster-cli-mcp",
-  "version": "1.0.0",
-  "private": true,
+  "name": "brello",
+  "version": "1.0.1",
+  "private": false,
   "type": "module",
   "description": "Roster CLI + MCP — query your team's work from the terminal or Claude",
   "bin": {
-    "roster": "./cli.mjs"
+    "brello": "cli.mjs",
+    "roster": "cli.mjs",
+    "brello-mcp": "mcp.mjs",
+    "roster-mcp": "mcp.mjs"
   },
+  "files": [
+    "cli.mjs",
+    "mcp.mjs",
+    "lib",
+    "README.md",
+    "QUERIES.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brickshubkuwait/roster-cli-mcp.git"
+  },
+  "license": "MIT",
   "scripts": {
     "mcp": "node mcp.mjs"
   },
