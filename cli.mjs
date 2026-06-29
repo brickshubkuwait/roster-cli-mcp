@@ -7,6 +7,28 @@ import { callRoster, QUERIES, saveToken, clearToken, getToken } from './lib/clie
 
 const [, , cmd, ...rest] = process.argv
 
+// ── terminal style kit: ANSI palette + box-drawing (no-ops when piped) ──
+const TTY = process.stdout.isTTY
+const wrap = (code) => (s) => TTY ? `\x1b[${code}m${s}\x1b[0m` : String(s)
+const c = {
+  bold: wrap(1), dim: wrap(2), cyan: wrap(36), green: wrap(32),
+  amber: wrap(33), red: wrap(31), magenta: wrap(35), grey: wrap(90),
+}
+const stripAnsi = (s) => String(s).replace(/\x1b\[[0-9;]*m/g, '')
+const vlen = (s) => stripAnsi(s).length
+const padEndV = (s, w) => s + ' '.repeat(Math.max(0, w - vlen(s)))
+const trunc = (s, w) => { s = String(s ?? ''); return s.length > w ? s.slice(0, Math.max(1, w - 1)) + '…' : s }
+const MAXW = 46
+// Semantic cell colour: status / thread-count / booleans light up.
+function paint(col, val) {
+  const s = String(val ?? '')
+  if (!s) return c.dim('·')
+  if (col === 'status') return s === 'live' ? c.green(s) : s === 'done' ? c.cyan(s) : s === 'archived' ? c.grey(s) : s
+  if (col === 'open_threads' || col === 'overdue') return (+s > 0) ? c.amber(s) : c.dim(s)
+  if (col === 'done') return s === 'true' ? c.green('✓') : s === 'false' ? c.dim('·') : s
+  return s
+}
+
 // ── auth: interactive, prompts for the token + a little terminal theatre ──
 if (cmd === 'auth') { const { runAuth } = await import('./lib/auth.mjs'); await runAuth(); process.exit(0) }
 
@@ -15,11 +37,11 @@ if (cmd === 'login') {
   const t = (rest[0] || '').trim()
   if (!t) { console.error('Paste your token:  brello login <token from your admin>'); process.exit(1) }
   saveToken(t)
-  console.log('✓ Token saved. Try:  brello stats')
+  console.log(c.green('✓') + ' token saved' + c.dim('  ·  try:  ') + c.cyan('brello stats'))
   process.exit(0)
 }
-if (cmd === 'logout') { clearToken(); console.log('✓ Token removed.'); process.exit(0) }
-if (cmd === 'whoami') { console.log(getToken() ? '✓ A token is set.' : '✗ No token. Run: brello auth'); process.exit(0) }
+if (cmd === 'logout') { clearToken(); console.log(c.green('✓') + ' token removed'); process.exit(0) }
+if (cmd === 'whoami') { console.log(getToken() ? c.green('✓') + ' a token is set' : c.red('✗') + ' no token  ' + c.dim('· run:  ') + c.cyan('brello auth')); process.exit(0) }
 
 // command -> { q: query name, arg: hint, admin: bool }
 const COMMANDS = {
@@ -44,21 +66,24 @@ const COMMANDS = {
 }
 
 function table(rows) {
-  if (!rows || !rows.length) { console.log('  (nothing here right now)'); return }
-  if (typeof rows[0] !== 'object') { rows.forEach(r => console.log('  ' + r)); return }
+  if (!rows || !rows.length) { console.log(c.dim('  · nothing here right now')); return }
+  if (typeof rows[0] !== 'object') { rows.forEach(r => console.log('  ' + c.cyan('›') + ' ' + r)); return }
   const cols = [...new Set(rows.flatMap(r => Object.keys(r)))]
-  const w = Object.fromEntries(cols.map(c => [c, Math.max(c.length, ...rows.map(r => String(r[c] ?? '').length))]))
-  const line = cells => cols.map(c => String(cells[c] ?? '').padEnd(w[c])).join('  ')
-  console.log('  ' + line(Object.fromEntries(cols.map(c => [c, c.toUpperCase()]))))
-  console.log('  ' + cols.map(c => '-'.repeat(w[c])).join('  '))
-  rows.forEach(r => console.log('  ' + line(r)))
+  const w = Object.fromEntries(cols.map(col => [col, Math.min(MAXW, Math.max(col.length, ...rows.map(r => String(r[col] ?? '').length)))]))
+  const bar = (l, m, rt) => c.dim('  ' + l + cols.map(col => '─'.repeat(w[col] + 2)).join(m) + rt)
+  const row = (cells, fn) => '  ' + c.dim('│') + cols.map(col => ' ' + padEndV(fn(col, cells[col]), w[col]) + ' ').join(c.dim('│')) + c.dim('│')
+  console.log(bar('┌', '┬', '┐'))
+  console.log(row(Object.fromEntries(cols.map(col => [col, col])), (col) => c.bold(c.cyan(trunc(col.toUpperCase().replace(/_/g, ' '), w[col])))))
+  console.log(bar('├', '┼', '┤'))
+  rows.forEach(r => console.log(row(r, (col, v) => paint(col, trunc(v, w[col])))))
+  console.log(bar('└', '┴', '┘'))
 }
 
 function printObject(o) {
-  // A clean key: value list (used for stats + a single card) instead of raw JSON.
-  if (o == null) { console.log('  (nothing here right now)'); return }
+  // Left-bar key/value list (used for stats + a single card) instead of raw JSON.
+  if (o == null) { console.log(c.dim('  · nothing here right now')); return }
   const w = Math.max(...Object.keys(o).map(k => k.length))
-  for (const [k, v] of Object.entries(o)) console.log('  ' + (k.replace(/_/g, ' ') + ':').padEnd(w + 2) + (v ?? '—'))
+  for (const [k, v] of Object.entries(o)) console.log('  ' + c.dim('┃ ') + c.cyan((k.replace(/_/g, ' ')).padEnd(w)) + '  ' + (v == null ? c.dim('—') : String(v)))
 }
 
 function help() {
@@ -118,17 +143,18 @@ try {
   const r = await callRoster(def.q, params)
   if (r.person) {
     const p = r.person, t = r.totals || {}
-    console.log(`\n${p.name}${p.role ? '  ·  ' + p.role.replace(/_/g, ' ') : ''}${p.department ? '  ·  ' + p.department : ''}`)
-    console.log(`  ${t.cards ?? r.count} cards   —   ${t.live ?? 0} live · ${t.done ?? 0} done · ${t.archived ?? 0} archived`)
-    if (r.active_on) console.log(`  ⏱  tracking now: ${r.active_on}`)
+    const sub = [p.role ? p.role.replace(/_/g, ' ') : '', p.department].filter(Boolean).join(' · ')
+    console.log(`\n${c.cyan('❯')} ${c.bold(p.name)}${sub ? '  ' + c.dim(sub) : ''}`)
+    console.log(`  ${c.green((t.live ?? 0) + ' live')}${c.dim(' · ')}${c.cyan((t.done ?? 0) + ' done')}${c.dim(' · ')}${c.grey((t.archived ?? 0) + ' archived')}${c.dim('   (' + (t.cards ?? r.count) + ' total)')}`)
+    if (r.active_on) console.log(`  ${c.amber('● tracking now')}${c.dim(' → ')}${r.active_on}`)
     console.log('')
   } else {
-    console.log(`\n${cmd.toUpperCase()}  —  ${r.count} result${r.count === 1 ? '' : 's'}\n`)
+    console.log(`\n${c.cyan('❯')} ${c.bold(cmd)}${c.dim(` · ${r.count} result${r.count === 1 ? '' : 's'}`)}\n`)
   }
   if (Array.isArray(r.data)) table(r.data)
   else printObject(r.data)
-  if (r.note) console.log('\n  note: ' + r.note)
-  console.log('\n  (run `brello help` to see everything you can ask)\n')
+  if (r.note) console.log('\n  ' + c.dim('▸ ') + c.amber(r.note))
+  console.log(c.dim(`\n  ↳ brello help  ·  for everything you can ask\n`))
 } catch (e) {
   const m = e.message || String(e)
   if (/NO_TOKEN/.test(m)) console.error('✖ No token yet. Get one from your admin, then run:  brello auth')
