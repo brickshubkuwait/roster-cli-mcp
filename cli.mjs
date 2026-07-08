@@ -107,6 +107,7 @@ const COMMANDS = {
   recent:      { q: 'recent', arg: '[n]' },
   now:         { q: 'now' },
   stages:      { q: 'stages' },
+  cards:       { q: 'cards', arg: '["<stage>"] [flags]' },
   departments: { q: 'departments' },
   shoots:      { q: 'shoots' },
   markup:      { q: 'markup', arg: '[filter]' },
@@ -254,7 +255,7 @@ function help() {
     ] },
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'leaves', 'departments'] },
     { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
-    { title: 'Board & production', cmds: ['stages', 'shoots', 'markup'] },
+    { title: 'Board & production', cmds: ['stages', 'cards', 'shoots', 'markup'] },
     { title: 'Admin',            cmds: ['ps-issues', 'audit'] },
   ]
   const groups = SECTIONS.map(s => ({
@@ -282,16 +283,24 @@ const def = COMMANDS[cmd]
 if (!def) { console.error(`I don't know "${cmd}".`); help(); process.exit(1) }
 
 const params = {}
+// global flags: --board widens card queries to the whole board; --unassigned filters to no-assignee
+const flags = new Set(rest.filter(a => a.startsWith('--')))
+const args = rest.filter(a => !a.startsWith('--'))
+if (flags.has('--board')) params.scope = 'board'
+if (def.q === 'cards') {
+  if (args.length) params.stage = args.join(' ').trim()
+  if (flags.has('--unassigned')) params.assignee = 'none'
+}
 if (def.q === 'search') {
-  params.q = rest.join(' ').trim()
+  params.q = args.join(' ').trim()
   if (!params.q) { console.error('Add what to search for, e.g.   brello search "reel"'); process.exit(1) }
 }
 if (def.q === 'card') {
-  params.id = (rest[0] || '').trim()
+  params.id = (args[0] || '').trim()
   if (!params.id) { console.error('Add a card id (first 8 chars are fine), e.g.   brello card 1c11685c'); process.exit(1) }
 }
 if (def.q === 'user') {
-  params.who = rest.join(' ').trim()
+  params.who = args.join(' ').trim()
   if (!params.who) { console.error('Add a name, e.g.   brello user Samer'); process.exit(1) }
 }
 if (def.q === 'markup') {
@@ -299,12 +308,12 @@ if (def.q === 'markup') {
   if (f) params.q = f   // optional name filter, e.g.  brello markup reel
 }
 if (def.q === 'client') {
-  params.client = rest.join(' ').trim()
+  params.client = args.join(' ').trim()
   if (!params.client) { console.error('Add a client name, e.g.   brello client "Foodhall"'); process.exit(1) }
 }
-if (def.q === 'due')    { const n = parseInt(rest[0], 10); if (Number.isFinite(n)) params.days = n; }
-if (def.q === 'done')   { const n = parseInt(rest[0], 10); if (Number.isFinite(n)) params.days = n; }
-if (def.q === 'recent') { const n = parseInt(rest[0], 10); if (Number.isFinite(n)) params.n = n; }
+if (def.q === 'due')    { const n = parseInt(args[0], 10); if (Number.isFinite(n)) params.days = n; }
+if (def.q === 'done')   { const n = parseInt(args[0], 10); if (Number.isFinite(n)) params.days = n; }
+if (def.q === 'recent') { const n = parseInt(args[0], 10); if (Number.isFinite(n)) params.n = n; }
 
 try {
   const r = await withSpinner(`querying · ${cmd}`, () => callRoster(def.q, params))

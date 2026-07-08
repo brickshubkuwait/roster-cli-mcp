@@ -7,7 +7,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { callRoster } from './lib/client.mjs'
 
-const server = new McpServer({ name: 'roster-brello', version: '1.0.0' })
+const server = new McpServer({ name: 'roster-brello', version: '1.1.0' })
 
 const asText = (r) => ({ content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] })
 const wrap = (query, mapParams = () => ({})) => async (args) => {
@@ -19,15 +19,27 @@ server.tool('roster_stats', 'Team dashboard: team size, open/done/overdue cards,
 server.tool('roster_team', 'List your team members', {}, wrap('team'))
 server.tool('roster_comments', 'Recent comments on your team’s cards', {}, wrap('comments'))
 server.tool('roster_overdue', 'Overdue cards for your team (past due, not done)', {}, wrap('overdue'))
-server.tool('roster_workload', 'Open + overdue card counts per person (who is overloaded)', {}, wrap('workload'))
+server.tool('roster_workload', 'Open + overdue card counts per person. Default scope "team" = your team only — pass scope "board" for everyone on the board (includes an Unassigned row).', { scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('workload', a => (a.scope ? { scope: a.scope } : {})))
 server.tool('roster_active', 'Who is actively tracking time right now (live Hubstaff timers)', {}, wrap('active'))
 server.tool('roster_leaves', 'Upcoming time off for your team (Vacation Tracker)', {}, wrap('leaves'))
 server.tool('roster_reactions', 'Recent emoji reactions on your team’s cards', {}, wrap('reactions'))
 server.tool('roster_activity', 'Recent activity on your team’s cards — moves (stage→stage), comments, assignments, splits, edits', {}, wrap('activity'))
-server.tool('roster_search', 'Search cards by title or client name', { q: z.string().describe('text to search for') }, wrap('search', a => ({ q: a.q })))
+server.tool('roster_search', 'Search cards by title or client name. Default scope "team" searches ONLY cards assigned to your team — pass scope "board" to search the entire board.', { q: z.string().describe('text to search for'), scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('search', a => ({ q: a.q, ...(a.scope ? { scope: a.scope } : {}) })))
 server.tool('roster_user_cards', 'Everything for one person — their whole card history (live AND archived) plus a dossier: role, department, open/done/archived totals, and what they are tracking right now', { who: z.string().describe('a person\'s name (full or partial)') }, wrap('user', a => ({ who: a.who })))
 server.tool('roster_card', 'Full card detail — description, stage, subtasks, split task, collaborators, linked cards', { id: z.string().describe('card id or its first 8 characters') }, wrap('card', a => ({ id: a.id })))
-server.tool('roster_stages', 'Board stages (lists) with your team’s open card count in each', {}, wrap('stages'))
+server.tool('roster_stages', 'Board stages (lists) with open card counts. Default scope "team" counts ONLY cards assigned to your team — pass scope "board" for true board totals.', { scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('stages', a => (a.scope ? { scope: a.scope } : {})))
+server.tool('roster_cards', 'List EVERY card matching the filters — the stage/board enumerator. Filters: stage (list name), assignee (name, or "none" for unassigned), client, done. Default scope "team" = only your team\'s cards; scope "board" = the whole board including unassigned. Every response carries a "filter" field stating exactly what was counted.', {
+  stage: z.string().optional().describe('list name, e.g. "Ready for Sprint" (case-insensitive)'),
+  assignee: z.string().optional().describe('person name, or "none"/"unassigned" for cards with no assignee'),
+  client: z.string().optional().describe('client name (partial OK)'),
+  done: z.boolean().optional().describe('true = completed only, false = open only, omit = both'),
+  scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards"),
+}, wrap('cards', a => ({ ...(a.stage ? { stage: a.stage } : {}), ...(a.assignee ? { assignee: a.assignee } : {}), ...(a.client ? { client: a.client } : {}), ...(typeof a.done === 'boolean' ? { done: a.done } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
+server.tool('roster_stage_cards', 'Every card currently in ONE stage (list) — e.g. roster_stage_cards("Ready for Sprint", scope "board"). Same engine as roster_cards.', {
+  stage: z.string().describe('the stage/list name, e.g. "Ready for Sprint"'),
+  assignee: z.string().optional().describe('person name, or "none" for unassigned only'),
+  scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards"),
+}, wrap('cards', a => ({ stage: a.stage, ...(a.assignee ? { assignee: a.assignee } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
 server.tool('roster_departments', 'The roster’s departments and headcount', {}, wrap('departments'))
 server.tool('roster_shoots', 'The whole shoot schedule — recent + upcoming, company-wide (date, client, type, crew)', {}, wrap('shoots'))
 server.tool('roster_markup', 'Markup.io review feed — videos/images submitted for review (name, type, submitted date, open comment-thread count, link). Optional name filter.', { q: z.string().optional().describe('optional filter by item name') }, wrap('markup', a => (a.q ? { q: a.q } : {})))
