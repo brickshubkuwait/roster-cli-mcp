@@ -7,7 +7,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { callRoster } from './lib/client.mjs'
 
-const server = new McpServer({ name: 'roster-brello', version: '1.1.0' })
+const server = new McpServer({ name: 'roster-brello', version: '1.3.0' })
 
 const asText = (r) => ({ content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] })
 const wrap = (query, mapParams = () => ({})) => async (args) => {
@@ -15,10 +15,10 @@ const wrap = (query, mapParams = () => ({})) => async (args) => {
   catch (e) { return { content: [{ type: 'text', text: 'Error: ' + e.message }], isError: true } }
 }
 
-server.tool('roster_stats', 'Team dashboard: team size, open/done/overdue cards, and how many are tracking now', {}, wrap('stats'))
-server.tool('roster_team', 'List your team members', {}, wrap('team'))
-server.tool('roster_comments', 'Recent comments on your team’s cards', {}, wrap('comments'))
-server.tool('roster_overdue', 'Overdue cards for your team (past due, not done)', {}, wrap('overdue'))
+server.tool('roster_stats', 'Dashboard totals: open/done/overdue cards and who is tracking now. Default scope "team" = your team\'s cards (reports team_size) — pass scope "board" for whole-board totals (reports people_with_cards + unassigned_cards instead).', { scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('stats', a => (a.scope ? { scope: a.scope } : {})))
+server.tool('roster_team', 'Company-wide directory of ALL active team members (names, departments, roles) — NOT card-scoped, so its count is bigger than your team. Card tools default to your team; the response\'s your_team/your_team_size fields say who that is.', {}, wrap('team'))
+server.tool('roster_comments', 'Recent comments on your team’s cards (team scope only)', {}, wrap('comments'))
+server.tool('roster_overdue', 'Overdue cards (past due, not done). Default scope "team" = your team\'s cards only — pass scope "board" for every overdue card on the board.', { scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('overdue', a => (a.scope ? { scope: a.scope } : {})))
 server.tool('roster_workload', 'Open + overdue card counts per person. Default scope "team" = your team only — pass scope "board" for everyone on the board (includes an Unassigned row).', { scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('workload', a => (a.scope ? { scope: a.scope } : {})))
 server.tool('roster_active', 'Who is actively tracking time right now (live Hubstaff timers)', {}, wrap('active'))
 server.tool('roster_leaves', 'Upcoming time off for your team (Vacation Tracker)', {}, wrap('leaves'))
@@ -43,10 +43,10 @@ server.tool('roster_stage_cards', 'Every card currently in ONE stage (list) — 
 server.tool('roster_departments', 'The roster’s departments and headcount', {}, wrap('departments'))
 server.tool('roster_shoots', 'The whole shoot schedule — recent + upcoming, company-wide (date, client, type, crew)', {}, wrap('shoots'))
 server.tool('roster_markup', 'Markup.io review feed — videos/images submitted for review (name, type, submitted date, open comment-thread count, link). Optional name filter.', { q: z.string().optional().describe('optional filter by item name') }, wrap('markup', a => (a.q ? { q: a.q } : {})))
-server.tool('roster_client', 'Everything for one client — every in-scope card (live + done), who is on it, with open/done/overdue totals', { client: z.string().describe('client name (partial OK)') }, wrap('client', a => ({ client: a.client })))
-server.tool('roster_due', 'Cards due soon — the next N days (default 7), soonest first', { days: z.number().optional().describe('days ahead, default 7') }, wrap('due', a => (a.days ? { days: a.days } : {})))
-server.tool('roster_done', 'Recently completed cards — the last N days (default 14)', { days: z.number().optional().describe('days back, default 14') }, wrap('done', a => (a.days ? { days: a.days } : {})))
-server.tool('roster_blocked', 'Blocked or stuck cards — explicit blockers, or overdue by 3+ days', {}, wrap('blocked'))
+server.tool('roster_client', 'Everything for one client — every card assigned to your team (live + done), who is on it, with open/done/overdue totals (team scope only)', { client: z.string().describe('client name (partial OK)') }, wrap('client', a => ({ client: a.client })))
+server.tool('roster_due', 'Your team\'s cards due soon — the next N days (default 7), soonest first (team scope only)', { days: z.number().optional().describe('days ahead, default 7') }, wrap('due', a => (a.days ? { days: a.days } : {})))
+server.tool('roster_done', 'Your team\'s recently completed cards — the last N days (default 14) (team scope only)', { days: z.number().optional().describe('days back, default 14') }, wrap('done', a => (a.days ? { days: a.days } : {})))
+server.tool('roster_blocked', 'Your team\'s blocked or stuck cards — explicit blockers, or overdue by 3+ days (team scope only)', {}, wrap('blocked'))
 server.tool('roster_recent', 'Recently touched cards across your team (default 20)', { n: z.number().optional().describe('how many, default 20') }, wrap('recent', a => (a.n ? { n: a.n } : {})))
 server.tool('roster_now', 'Live pulse — who is tracking now, what is due today, and the latest card moves', {}, wrap('now'))
 server.tool('roster_ps_issues', 'Open Product Support issues (admin only)', {}, wrap('ps_issues'))
