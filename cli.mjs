@@ -119,6 +119,7 @@ const COMMANDS = {
   now:         { q: 'now' },
   stages:      { q: 'stages' },
   cards:       { q: 'cards', arg: '["<stage>"] [flags]' },
+  'stage-stats': { q: 'stage_stats' },
   departments: { q: 'departments' },
   shoots:      { q: 'shoots' },
   markup:      { q: 'markup', arg: '[filter]' },
@@ -267,7 +268,7 @@ function help() {
     ] },
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'leaves', 'departments'] },
     { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
-    { title: 'Board & production', cmds: ['stages', 'cards', 'shoots', 'markup'] },
+    { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'markup'] },
     { title: 'Admin',            cmds: ['ps-issues', 'audit'] },
   ]
   const groups = SECTIONS.map(s => ({

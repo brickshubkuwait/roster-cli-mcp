@@ -60,7 +60,19 @@ ok('team_size' in statsT.data, 'stats(team) reports team_size')
 const team = await call('roster_team')
 ok(team.scope === 'company directory' && !!team.your_team, `roster_team scope="${team.scope}", your_team="${team.your_team}"`)
 
-// 7) changelog is local and matches the package version
+// 7) dwell fields on listing rows + stage history/effort on card + stage stats
+const dwellCards = await call('roster_cards', { stage: 'Ready for Sprint', scope: 'board' })
+ok(dwellCards.data.every(c => 'time_in_stage_hours' in c && 'age' in c && ['moved', 'created_at'].includes(c.dwell_basis)),
+  'every roster_cards row carries time_in_stage_hours/age/dwell_basis')
+const detail = await call('roster_card', { id: dwellCards.data[0].id })
+ok(Array.isArray(detail.data.stage_history) && detail.data.stage_history.length > 0
+  && 'entered_at' in detail.data.stage_history[0] && 'duration_hours' in detail.data.stage_history[0],
+  `roster_card stage_history has ${detail.data.stage_history?.length} segments`)
+const stats = await call('roster_stage_stats')
+ok(stats.count === 14 && stats.scope === 'board' && stats.data.every(s => 'cards_entered' in s && 'skip_pct' in s),
+  `roster_stage_stats: ${stats.count} stages, board scope`)
+
+// 8) changelog is local and matches the package version
 const chlog = await call('roster_changelog')
 const pkgVersion = JSON.parse(await (await import('node:fs/promises')).readFile(new URL('./package.json', import.meta.url), 'utf8')).version
 ok(chlog.installed === pkgVersion && chlog.releases.length >= 5, `roster_changelog v${chlog.installed} = package v${pkgVersion}, ${chlog.releases?.length} releases`)
