@@ -4,6 +4,7 @@
 //   brello stats | team | overdue | workload | active | leaves
 //   brello comments | reactions | search "<text>" | card <id> | shoots | help
 import { callRoster, QUERIES, saveToken, clearToken, getToken } from './lib/client.mjs'
+import { CHANGELOG, VERSION } from './lib/changelog.mjs'
 import { homedir } from 'node:os'
 import { existsSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -85,6 +86,16 @@ if (cmd === 'login') {
 }
 if (cmd === 'logout') { clearToken(); console.log(c.green('✓') + ' token removed'); process.exit(0) }
 if (cmd === 'whoami') { console.log(getToken() ? c.green('✓') + ' a token is set' : c.red('✗') + ' no token  ' + c.dim('· run:  ') + c.cyan('brello auth')); process.exit(0) }
+if (cmd === 'changelog' || cmd === 'whatsnew') {
+  console.log('\n' + c.bold('brello changelog') + c.dim('  ·  current  ') + c.cyan('v' + VERSION) + '\n')
+  for (const r of CHANGELOG) {
+    console.log(c.bold(c.cyan('v' + r.version)) + c.dim('  ·  ' + r.date + '  ·  ') + c.bold(r.title))
+    for (const it of r.items) console.log(c.dim('   • ') + it)
+    console.log('')
+  }
+  console.log(c.dim('  update:  ') + c.cyan('npm i -g brello') + '\n')
+  process.exit(0)
+}
 
 // command -> { q: query name, arg: hint, admin: bool }
 const COMMANDS = {
@@ -252,6 +263,7 @@ function help() {
       ['auth', '', 'Sign in — paste the token your admin gave you'],
       ['whoami', '', 'Check whether a token is set'],
       ['logout', '', 'Remove your saved token'],
+      ['changelog', '', "What's new — every release"],
     ] },
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'leaves', 'departments'] },
     { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },

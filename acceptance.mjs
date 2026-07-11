@@ -60,6 +60,11 @@ ok('team_size' in statsT.data, 'stats(team) reports team_size')
 const team = await call('roster_team')
 ok(team.scope === 'company directory' && !!team.your_team, `roster_team scope="${team.scope}", your_team="${team.your_team}"`)
 
+// 7) changelog is local and matches the package version
+const chlog = await call('roster_changelog')
+const pkgVersion = JSON.parse(await (await import('node:fs/promises')).readFile(new URL('./package.json', import.meta.url), 'utf8')).version
+ok(chlog.installed === pkgVersion && chlog.releases.length >= 5, `roster_changelog v${chlog.installed} = package v${pkgVersion}, ${chlog.releases?.length} releases`)
+
 console.log(`\n${fail === 0 ? 'ALL PASSED' : 'FAILURES'}: ${pass} passed, ${fail} failed`)
 await client.close()
 process.exit(fail === 0 ? 0 : 1)
