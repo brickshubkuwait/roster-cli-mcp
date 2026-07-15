@@ -55,5 +55,17 @@ server.tool('roster_changelog', `Brello release history — what changed in ever
 server.tool('roster_ps_issues', 'Open Product Support issues (admin only)', {}, wrap('ps_issues'))
 server.tool('roster_audit', 'Access log: who queried what and when (admin only)', {}, wrap('audit'))
 
+// ── write tools — act on a single card. `card` is a card id OR an exact, unique
+// card name; when a name is ambiguous the server returns an error asking for the id.
+server.tool('roster_comment', 'Add a comment to a card', { card: z.string().describe('card id or exact card name'), body: z.string().describe('the comment text') }, wrap('comment', a => ({ card: a.card, body: a.body })))
+server.tool('roster_move', 'Move a card to a list', { card: z.string().describe('card id or exact card name'), to: z.string().describe('destination list name or id') }, wrap('move', a => ({ card: a.card, to: a.to })))
+server.tool('roster_set_due', 'Set or clear a card’s due date', { card: z.string().describe('card id or exact card name'), due: z.string().nullable().optional().describe('due date "YYYY-MM-DD" — pass null or "" to clear it') }, wrap('set_due', a => ({ card: a.card, due: a.due ?? null })))
+server.tool('roster_mark_done', 'Mark a card done, or reopen it', { card: z.string().describe('card id or exact card name'), done: z.boolean().optional().describe('true (default) marks done; false reopens it') }, wrap('mark_done', a => ({ card: a.card, ...(typeof a.done === 'boolean' ? { done: a.done } : {}) })))
+server.tool('roster_set_priority', 'Set or clear a card’s priority', { card: z.string().describe('card id or exact card name'), priority: z.enum(['top', 'high', 'medium', 'low', '']).describe('priority level — pass "" to clear it') }, wrap('set_priority', a => ({ card: a.card, priority: a.priority })))
+server.tool('roster_assign', 'Assign a card to someone, or unassign it', { card: z.string().describe('card id or exact card name'), to: z.string().describe('member name or Uxxxx slack id — pass "" to unassign') }, wrap('assign', a => ({ card: a.card, to: a.to })))
+server.tool('roster_rename', 'Rename a card', { card: z.string().describe('card id or exact card name'), name: z.string().describe('the new card title') }, wrap('rename', a => ({ card: a.card, name: a.name })))
+server.tool('roster_describe', 'Set a card’s description', { card: z.string().describe('card id or exact card name'), description: z.string().describe('the new description text') }, wrap('describe', a => ({ card: a.card, description: a.description })))
+server.tool('roster_archive', 'Archive a card, or restore it', { card: z.string().describe('card id or exact card name'), restore: z.boolean().optional().describe('omit/false archives the card; true restores it') }, wrap('archive', a => ({ card: a.card, ...(typeof a.restore === 'boolean' ? { restore: a.restore } : {}) })))
+
 await server.connect(new StdioServerTransport())
 console.error('[roster-mcp] ready')

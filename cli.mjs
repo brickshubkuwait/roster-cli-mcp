@@ -127,6 +127,68 @@ const COMMANDS = {
   audit:       { q: 'audit', admin: true },
 }
 
+// write commands — act on a single card. <card> is a card id OR an exact,
+// unique card name. `q` is the server action; `arg` is the usage hint.
+const WRITES = {
+  comment:  { q: 'comment',      arg: '<card> <text…>' },
+  move:     { q: 'move',         arg: '<card> <list…>' },
+  due:      { q: 'set_due',      arg: '<card> <date|clear>' },
+  done:     { q: 'mark_done',    arg: '<card> [--undo]' },
+  priority: { q: 'set_priority', arg: '<card> <top|high|medium|low|none>' },
+  assign:   { q: 'assign',       arg: '<card> <name…|none>' },
+  rename:   { q: 'rename',       arg: '<card> <new name…>' },
+  describe: { q: 'describe',     arg: '<card> <text…>' },
+  archive:  { q: 'archive',      arg: '<card> [--restore]' },
+}
+const isNumericArg = (s) => /^\d+$/.test(String(s || '').trim())
+// due / done are ALSO read commands. Route to the write path only when it clearly
+// means "act on a card": a first argument that isn't a bare number of days.
+function wantsWrite(name, args) {
+  if (!WRITES[name]) return false
+  if (!COMMANDS[name]) return true
+  return args.length > 0 && !isNumericArg(args[0])
+}
+async function runWrite(name, args, flags) {
+  const card = (args[0] || '').trim()
+  if (!card) { console.error(`Add a card id or name, e.g.   brello ${name} 1c11685c …`); process.exit(1) }
+  const tail = args.slice(1)
+  const params = { card }
+  if (name === 'comment') {
+    params.body = tail.join(' ').trim()
+    if (!params.body) { console.error('Add the comment text, e.g.   brello comment 1c11685c "final cut is up"'); process.exit(1) }
+  } else if (name === 'move') {
+    params.to = tail.join(' ').trim()
+    if (!params.to) { console.error('Add the list to move it to, e.g.   brello move 1c11685c In Progress'); process.exit(1) }
+  } else if (name === 'due') {
+    const v = tail.join(' ').trim()
+    params.due = (v === '' || /^(clear|none)$/i.test(v)) ? null : v
+  } else if (name === 'done') {
+    params.done = !flags.has('--undo')
+  } else if (name === 'priority') {
+    const v = (tail[0] || '').trim().toLowerCase()
+    params.priority = /^(none|clear)$/.test(v) ? '' : v
+  } else if (name === 'assign') {
+    const v = tail.join(' ').trim()
+    params.to = /^(none|unassign|unassigned)$/i.test(v) ? '' : v
+  } else if (name === 'rename') {
+    params.name = tail.join(' ').trim()
+    if (!params.name) { console.error('Add the new name, e.g.   brello rename 1c11685c New title'); process.exit(1) }
+  } else if (name === 'describe') {
+    params.description = tail.join(' ').trim()
+    if (!params.description) { console.error('Add the description text, e.g.   brello describe 1c11685c "the full brief"'); process.exit(1) }
+  } else if (name === 'archive') {
+    if (flags.has('--restore')) params.restore = true
+  }
+  try {
+    const r = await withSpinner(`${name} · ${card}`, () => callRoster(WRITES[name].q, params))
+    const detail = r.detail || (r.comment_id ? 'comment added' : 'done')
+    console.log('  ' + c.green('✓') + ' ' + detail)
+  } catch (e) {
+    console.error('  ' + c.red('✗') + ' ' + (e.message || String(e)))
+    process.exit(1)
+  }
+}
+
 function table(rows, ctx) {
   if (!rows || !rows.length) { console.log(emptyLine(ctx)); return }
   if (typeof rows[0] !== 'object') { rows.forEach(r => console.log('  ' + c.cyan('›') + ' ' + r)); return }
@@ -185,8 +247,15 @@ const DETAIL = {
   shoots:      { sum: 'The shoot schedule — recent and upcoming (company-wide).', extra: 'No argument. Not department-scoped: anyone can see when a shoot is and who is on the crew.' },
   markup:      { sum: 'The Markup.io review feed — what is out for review.', extra: 'Optional argument: filter by item name.  OPEN THREADS = unresolved comment threads.  e.g.  brello markup reel' },
   client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).  e.g.  brello client Foodhall' },
-  due:         { sum: 'Cards coming due soon for your team.', extra: 'Optional argument: how many days ahead to look (default 7).  e.g.  brello due 3' },
-  done:        { sum: 'Cards your team finished recently.', extra: 'Optional argument: how many days back to look (default 7).  e.g.  brello done 14' },
+  due:         { sum: 'Cards coming due soon — or set one card’s due date.', extra: 'With a number (or nothing): your team’s cards due in the next N days (default 7).  With a card id/name + a date: sets that card’s due date; pass "clear" to remove it.  e.g.  brello due 3   ·   brello due 1c11685c 2026-07-20' },
+  done:        { sum: 'Cards your team finished recently — or mark one done.', extra: 'With a number (or nothing): cards completed in the last N days (default 7).  With a card id/name: marks that card done; add --undo to reopen it.  e.g.  brello done 14   ·   brello done 1c11685c' },
+  comment:     { sum: 'Add a comment to a card.', extra: 'Arguments: a card (id or exact name) then the comment text.  e.g.  brello comment 1c11685c "final cut is up"' },
+  move:        { sum: 'Move a card to another list.', extra: 'Arguments: a card (id or exact name) then the list name.  e.g.  brello move 1c11685c In Progress' },
+  priority:    { sum: 'Set or clear a card’s priority.', extra: 'Arguments: a card (id or exact name) then top / high / medium / low — or "none" to clear it.  e.g.  brello priority 1c11685c high' },
+  assign:      { sum: 'Assign a card to someone — or unassign it.', extra: 'Arguments: a card (id or exact name) then a name (or Uxxxx slack id) — or "none" to unassign.  e.g.  brello assign 1c11685c Samer' },
+  rename:      { sum: 'Rename a card.', extra: 'Arguments: a card (id or exact name) then the new title.  e.g.  brello rename 1c11685c New title' },
+  describe:    { sum: 'Set a card’s description.', extra: 'Arguments: a card (id or exact name) then the description text.  e.g.  brello describe 1c11685c "the full brief"' },
+  archive:     { sum: 'Archive a card — or restore it.', extra: 'Argument: a card (id or exact name).  Add --restore to bring it back.  e.g.  brello archive 1c11685c' },
   blocked:     { sum: 'Cards that are stuck waiting on something else.', extra: 'No argument. Shows what each card is blocked by.' },
   recent:      { sum: 'The newest cards and changes across your team.', extra: 'No argument. A quick "what’s new" since you last looked.' },
   now:         { sum: 'A live snapshot of who is working on what right now.', extra: 'No argument. Like active, focused on the current moment.' },
@@ -243,7 +312,7 @@ function legendFor(ctx) { return ctx ? LEGENDS[aliasName(ctx)] : null }
 // Focused panel for a single command — what it does, its argument, the columns.
 function helpFor(name) {
   const key = aliasName(name)
-  const def = COMMANDS[key] || COMMANDS[name]
+  const def = COMMANDS[key] || COMMANDS[name] || WRITES[key]
   const d = DETAIL[key]
   if (!def && !d) { console.error(`I don't have a help page for "${name}".`); help(); return }
   const usage = 'brello ' + key + (def?.arg ? ' ' + def.arg : '')
@@ -269,6 +338,17 @@ function help() {
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'leaves', 'departments'] },
     { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
     { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'markup'] },
+    { title: 'Act on cards', rows: [
+      ['comment', '<card> <text>', 'Add a comment to a card'],
+      ['move', '<card> <list>', 'Move a card to another list'],
+      ['due', '<card> <date>', 'Set or clear a card’s due date'],
+      ['done', '<card>', 'Mark a card done (--undo reopens)'],
+      ['priority', '<card> <level>', 'Set or clear a card’s priority'],
+      ['assign', '<card> <who>', 'Assign a card (none unassigns)'],
+      ['rename', '<card> <name>', 'Rename a card'],
+      ['describe', '<card> <text>', 'Set a card’s description'],
+      ['archive', '<card>', 'Archive a card (--restore brings it back)'],
+    ] },
     { title: 'Admin',            cmds: ['ps-issues', 'audit'] },
   ]
   const groups = SECTIONS.map(s => ({
@@ -292,13 +372,21 @@ if (!cmd || cmd === '--help' || cmd === '-h' || (cmd === 'help' && !rest.length)
 if (cmd === 'help') { helpFor((rest[0] || '').trim()); process.exit(0) }
 // also support  brello <command> --help / -h  → the focused panel for that command
 if (rest.includes('--help') || rest.includes('-h')) { helpFor(cmd); process.exit(0) }
+
+// global flags: --board widens card queries to the whole board; --unassigned filters
+// to no-assignee; --undo / --restore feed the write commands.
+const flags = new Set(rest.filter(a => a.startsWith('--')))
+const args = rest.filter(a => !a.startsWith('--'))
+
+// write commands act on one card (comment/move/due/done/priority/assign/rename/
+// describe/archive). due & done double as read commands: a non-numeric first arg
+// ("brello due 1c11685c 2026-07-20") acts on that card; a number or nothing reads.
+if (wantsWrite(cmd, args)) { await runWrite(cmd, args, flags); process.exit(0) }
+
 const def = COMMANDS[cmd]
 if (!def) { console.error(`I don't know "${cmd}".`); help(); process.exit(1) }
 
 const params = {}
-// global flags: --board widens card queries to the whole board; --unassigned filters to no-assignee
-const flags = new Set(rest.filter(a => a.startsWith('--')))
-const args = rest.filter(a => !a.startsWith('--'))
 if (flags.has('--board')) params.scope = 'board'
 if (def.q === 'cards') {
   if (args.length) params.stage = args.join(' ').trim()
