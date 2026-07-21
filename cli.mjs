@@ -189,6 +189,48 @@ async function runWrite(name, args, flags) {
   }
 }
 
+// create — mint a NEW card. The title is everything not behind a flag; the rest
+// come as value flags:  brello create "Spirit Felice Bahrain artwork"
+//   --assignee Abrar --due 2026-07-22 --client "Spirit Felice" --dept Design
+//   --priority high --list "Ready for Sprint" --desc "the brief"
+async function runCreate(rest) {
+  const opts = {}
+  const words = []
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i]
+    if (a.startsWith('--')) {
+      const key = a.slice(2)
+      const next = rest[i + 1]
+      opts[key] = (next && !next.startsWith('--')) ? rest[++i] : ''
+    } else words.push(a)
+  }
+  const name = (opts.name || words.join(' ')).trim()
+  if (!name) { console.error('Add a card title, e.g.   brello create "Spirit Felice Bahrain artwork" --assignee Abrar --due 2026-07-22'); process.exit(1) }
+  const params = { name }
+  const list = opts.list || opts.stage
+  const who = opts.assignee || opts.assign || opts.to
+  const dept = opts.dept || opts.department
+  const desc = opts.desc || opts.description
+  if (list) params.list = list
+  if (who) params.assignee = who
+  if (opts.due) params.due = opts.due
+  if (opts.client) params.client = opts.client
+  if (dept) params.department = dept
+  if (opts.priority) params.priority = opts.priority
+  if (desc) params.description = desc
+  try {
+    const r = await withSpinner(`create · ${name}`, () => callRoster('create', params))
+    const bits = [
+      r.list && `in ${r.list}`, r.assignee && `→ ${r.assignee}`,
+      r.due && `due ${r.due}`, r.priority && `${r.priority} priority`,
+    ].filter(Boolean).join(c.dim(' · '))
+    console.log('  ' + c.green('✓') + ' created ' + c.bold(r.card) + (bits ? '  ' + c.dim(bits) : '') + (r.id ? c.dim('  ·  ' + String(r.id).slice(0, 8)) : ''))
+  } catch (e) {
+    console.error('  ' + c.red('✗') + ' ' + (e.message || String(e)))
+    process.exit(1)
+  }
+}
+
 function table(rows, ctx) {
   if (!rows || !rows.length) { console.log(emptyLine(ctx)); return }
   if (typeof rows[0] !== 'object') { rows.forEach(r => console.log('  ' + c.cyan('›') + ' ' + r)); return }
@@ -249,6 +291,7 @@ const DETAIL = {
   client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).  e.g.  brello client Foodhall' },
   due:         { sum: 'Cards coming due soon — or set one card’s due date.', extra: 'With a number (or nothing): your team’s cards due in the next N days (default 7).  With a card id/name + a date: sets that card’s due date; pass "clear" to remove it.  e.g.  brello due 3   ·   brello due 1c11685c 2026-07-20' },
   done:        { sum: 'Cards your team finished recently — or mark one done.', extra: 'With a number (or nothing): cards completed in the last N days (default 7).  With a card id/name: marks that card done; add --undo to reopen it.  e.g.  brello done 14   ·   brello done 1c11685c' },
+  create:      { sum: 'Create a new card on the board.', extra: 'Argument: the card title in quotes. Everything else is an optional value flag: --list "<stage>" (default: the board’s first list), --assignee <name|id>, --due YYYY-MM-DD, --client "<tag>", --dept <department>, --priority <top|high|medium|low>, --desc "<brief>".  e.g.  brello create "Spirit Felice Bahrain artwork" --assignee Abrar --due 2026-07-22 --dept Design' },
   comment:     { sum: 'Add a comment to a card.', extra: 'Arguments: a card (id or exact name) then the comment text.  e.g.  brello comment 1c11685c "final cut is up"' },
   move:        { sum: 'Move a card to another list.', extra: 'Arguments: a card (id or exact name) then the list name.  e.g.  brello move 1c11685c In Progress' },
   priority:    { sum: 'Set or clear a card’s priority.', extra: 'Arguments: a card (id or exact name) then top / high / medium / low — or "none" to clear it.  e.g.  brello priority 1c11685c high' },
@@ -339,6 +382,7 @@ function help() {
     { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
     { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'markup'] },
     { title: 'Act on cards', rows: [
+      ['create', '"<title>" [flags]', 'Create a new card (--assignee --due --client --dept --priority --list)'],
       ['comment', '<card> <text>', 'Add a comment to a card'],
       ['move', '<card> <list>', 'Move a card to another list'],
       ['due', '<card> <date>', 'Set or clear a card’s due date'],
@@ -377,6 +421,10 @@ if (rest.includes('--help') || rest.includes('-h')) { helpFor(cmd); process.exit
 // to no-assignee; --undo / --restore feed the write commands.
 const flags = new Set(rest.filter(a => a.startsWith('--')))
 const args = rest.filter(a => !a.startsWith('--'))
+
+// create mints a NEW card (title + value flags), so it parses `rest` itself
+// rather than going through the card-ref write path.
+if (cmd === 'create' || cmd === 'new') { await runCreate(rest); process.exit(0) }
 
 // write commands act on one card (comment/move/due/done/priority/assign/rename/
 // describe/archive). due & done double as read commands: a non-numeric first arg

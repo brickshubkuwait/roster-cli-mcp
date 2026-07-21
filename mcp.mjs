@@ -55,6 +55,31 @@ server.tool('roster_changelog', `Brello release history — what changed in ever
 server.tool('roster_ps_issues', 'Open Product Support issues (admin only)', {}, wrap('ps_issues'))
 server.tool('roster_audit', 'Access log: who queried what and when (admin only)', {}, wrap('audit'))
 
+// ── create tool — mint a brand-new card on the board. Only `name` is required;
+// it lands in the board's first list unless you name one. Assignee, due date,
+// client tag, department, priority and description are all optional. Use this
+// when someone says "make a task/card for X" — e.g. "task for Abrar to make the
+// Spirit Felice Bahrain artwork, due tomorrow".
+server.tool('roster_create', 'Create a NEW card on the board (task). Only "name" is required; the card lands in the board\'s first list unless you pass "list". Optionally assign it, set a due date (YYYY-MM-DD), tag a client, set the department or priority, and add a description. Use this whenever someone asks to make/add a new task or card for a person.', {
+  name: z.string().describe('the card title, e.g. "Spirit Felice Bahrain artwork"'),
+  list: z.string().optional().describe('the stage/list to create it in — defaults to the board\'s first list'),
+  assignee: z.string().optional().describe('who to assign it to — a member name or Uxxxx slack id'),
+  due: z.string().optional().describe('due date "YYYY-MM-DD"'),
+  client: z.string().optional().describe('client tag to attach (must already exist on the board)'),
+  department: z.string().optional().describe('department chip, e.g. "Design", "Video Edit", "Creative"'),
+  priority: z.enum(['top', 'high', 'medium', 'low']).optional().describe('priority level'),
+  description: z.string().optional().describe('the card description / brief'),
+}, wrap('create', a => ({
+  name: a.name,
+  ...(a.list ? { list: a.list } : {}),
+  ...(a.assignee ? { assignee: a.assignee } : {}),
+  ...(a.due ? { due: a.due } : {}),
+  ...(a.client ? { client: a.client } : {}),
+  ...(a.department ? { department: a.department } : {}),
+  ...(a.priority ? { priority: a.priority } : {}),
+  ...(a.description ? { description: a.description } : {}),
+})))
+
 // ── write tools — act on a single card. `card` is a card id OR an exact, unique
 // card name; when a name is ambiguous the server returns an error asking for the id.
 server.tool('roster_comment', 'Add a comment to a card', { card: z.string().describe('card id or exact card name'), body: z.string().describe('the comment text') }, wrap('comment', a => ({ card: a.card, body: a.body })))
