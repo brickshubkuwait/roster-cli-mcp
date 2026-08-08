@@ -50,8 +50,8 @@ brello auth
 | `brello activity` | Card history — moves (stage→stage), comments, splits, edits |
 | `brello search "<text>"` | Find cards by title or client |
 | `brello user <name>` | Everything for one person — every card, live AND archived, with their open/done/archived totals + what they're tracking now |
-| `brello card <id>` | Every field on a card — brief, subtasks, split, collaborators, links, created + last update |
-| `brello markup [filter]` | Markup.io review feed — videos/images submitted for review, open comment-thread counts + links |
+| `brello card <id>` | Every field on a card — workflow, Studio, Salesforce, send/view receipt, Slack thread, sizes and copy |
+| `brello studio [filter]` | Bricks Studio review feed — status/version, comments, client views, and open/share links |
 | `brello client "<name>"` | Everything for one client — every in-scope card (live + done), who's on it, with open/done/overdue totals |
 | `brello due [days]` | Cards due soon — the next N days (default 7), soonest first |
 | `brello done [days]` | Recently completed cards — the last N days (default 14) |

@@ -122,7 +122,7 @@ const COMMANDS = {
   'stage-stats': { q: 'stage_stats' },
   departments: { q: 'departments' },
   shoots:      { q: 'shoots' },
-  markup:      { q: 'markup', arg: '[filter]' },
+  studio:      { q: 'studio', arg: '[filter]' },
   'ps-issues': { q: 'ps_issues', admin: true },
   audit:       { q: 'audit', admin: true },
 }
@@ -261,7 +261,7 @@ function printObject(o) {
   for (const [k, v] of Object.entries(o)) {
     const n = Number(v)
     const isNum = v !== '' && v != null && Number.isFinite(n)
-    let val = v == null ? c.dim('—') : String(v)
+    let val = v == null ? c.dim('—') : (typeof v === 'object' ? JSON.stringify(v) : String(v))
     if (k === 'location' && v && TTY) val = osc8(mapsUrl(String(v)), c.cyan(String(v))) + c.dim(' ↗')
     const bar = isNum ? '  ' + c.cyan(sparkbar(n)) : ''
     console.log('  ' + c.dim('┃ ') + c.cyan((k.replace(/_/g, ' ')).padEnd(w)) + '  ' + val + bar)
@@ -283,11 +283,11 @@ const DETAIL = {
   activity:    { sum: 'A feed of everything that happened on your team’s cards.', extra: 'No argument. Moves between stages, comments, reassignments, splits and edits — newest first.' },
   search:      { sum: 'Find cards by title or client name.', extra: 'Argument: the text to look for (quote it if it has spaces).  e.g.  brello search "reel"' },
   user:        { sum: 'A full dossier for one person — every card they own.', extra: 'Argument: a name (full or partial).  Shows live AND archived cards, their totals, and what they are tracking now.  e.g.  brello user Samer' },
-  card:        { sum: 'Everything about a single card.', extra: 'Argument: a card id (the first 8 characters are enough).  Shows stage, description, subtasks, split, collaborators and linked cards.  e.g.  brello card 1c11685c' },
+  card:        { sum: 'Everything about a single card.', extra: 'Argument: a card id (the first 8 characters are enough). Shows workflow, tracked effort, Salesforce opportunity/invoice, Studio submissions, client send/view receipt, Slack thread, deliverable sizes and approved EN/AR copy. e.g. brello card 1c11685c' },
   stages:      { sum: 'The board’s workflow stages and how full each one is.', extra: 'No argument. CARDS = your team’s open cards in that stage; OVERDUE = how many of those are late.' },
   departments: { sum: 'The roster’s departments and their headcount.', extra: 'No argument. ACTIVE NOW = how many people in each department are tracking time.' },
   shoots:      { sum: 'The shoot schedule — recent and upcoming (company-wide).', extra: 'No argument. Not department-scoped: anyone can see when a shoot is and who is on the crew.' },
-  markup:      { sum: 'The Markup.io review feed — what is out for review.', extra: 'Optional argument: filter by item name.  OPEN THREADS = unresolved comment threads.  e.g.  brello markup reel' },
+  studio:      { sum: 'The Bricks Studio review feed — what is out for review.', extra: 'Optional argument: filter by submission, card or client name. Add --board for the whole board. Shows status, version, comments, client-view receipt and Studio links. e.g. brello studio reel' },
   client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).  e.g.  brello client Foodhall' },
   due:         { sum: 'Cards coming due soon — or set one card’s due date.', extra: 'With a number (or nothing): your team’s cards due in the next N days (default 7).  With a card id/name + a date: sets that card’s due date; pass "clear" to remove it.  e.g.  brello due 3   ·   brello due 1c11685c 2026-07-20' },
   done:        { sum: 'Cards your team finished recently — or mark one done.', extra: 'With a number (or nothing): cards completed in the last N days (default 7).  With a card id/name: marks that card done; add --undo to reopen it.  e.g.  brello done 14   ·   brello done 1c11685c' },
@@ -320,7 +320,7 @@ const LEGENDS = {
   stages:      'CARDS = open cards here · OVERDUE = how many are late',
   departments: 'PEOPLE = headcount · ACTIVE NOW = tracking time',
   shoots:      'TIME = start time · CREW = who’s on it (first few)',
-  markup:      'OPEN THREADS = unresolved comments · LINK = open in Markup.io',
+  studio:      'VERSION = latest Studio version · COMMENTS = review comments · CLIENT VIEWED = qualifying client share open',
   client:      'STAGE = board list · ASSIGNEE = owner · DUE = due date',
   due:         'DUE = due date · IN = days until due',
   done:        'DONE = when it was completed',
@@ -343,7 +343,7 @@ const EMPTY_HINTS = {
   done:     'nothing completed in that window',
   search:   'nothing matched — try a shorter or different word',
   client:   'no cards for that client in your scope',
-  markup:   'nothing in the review feed',
+  studio:   'nothing in the Studio review feed',
   shoots:   'no shoots scheduled in that range',
 }
 const aliasName = (name) => name === 'ps_issues' ? 'ps-issues' : name
@@ -380,7 +380,7 @@ function help() {
     ] },
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'leaves', 'departments'] },
     { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
-    { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'markup'] },
+    { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'studio'] },
     { title: 'Act on cards', rows: [
       ['create', '"<title>" [flags]', 'Create a new card (--assignee --due --client --dept --priority --list)'],
       ['comment', '<card> <text>', 'Add a comment to a card'],
@@ -408,7 +408,7 @@ function help() {
     }
     console.log('')
   }
-  console.log(`${D}  examples:  brello user Samer   ·   brello markup reel   ·   brello card 1c11685c${R}`)
+  console.log(`${D}  examples:  brello user Samer   ·   brello studio reel   ·   brello card 1c11685c${R}`)
   console.log(`${D}  new here?  run  ${R}${C}brello auth${R}${D}  first, then  ${R}${C}brello stats${R}\n`)
 }
 
@@ -452,9 +452,9 @@ if (def.q === 'user') {
   params.who = args.join(' ').trim()
   if (!params.who) { console.error('Add a name, e.g.   brello user Samer'); process.exit(1) }
 }
-if (def.q === 'markup') {
-  const f = rest.join(' ').trim()
-  if (f) params.q = f   // optional name filter, e.g.  brello markup reel
+if (def.q === 'studio') {
+  const f = args.join(' ').trim()
+  if (f) params.q = f   // optional name filter, e.g. brello studio reel
 }
 if (def.q === 'client') {
   params.client = args.join(' ').trim()
