@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Brello CLI — query your team's work.
-//   brello login <token>   (one time)   then:
+//   brello auth   (one time, or  pbpaste | brello login)   then:
 //   brello stats | team | overdue | workload | active | leaves
 //   brello comments | reactions | search "<text>" | card <id> | shoots | help
-import { callRoster, QUERIES, saveToken, clearToken, getToken } from './lib/client.mjs'
+import { callRoster, QUERIES, clearToken, getToken, ensureRosterDir, describeError, isLegacyKey, CONNECT_URL } from './lib/client.mjs'
+import { printNotice, printLegacyHint } from './lib/auth.mjs'
 import { CHANGELOG, VERSION } from './lib/changelog.mjs'
 import { homedir } from 'node:os'
-import { existsSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const [, , cmd, ...rest] = process.argv
@@ -67,7 +68,7 @@ function paint(col, val) {
 // and not for `auth`/`login` (those have their own animation). ──
 const MARK = join(homedir(), '.roster', '.welcomed')
 if (TTY && !existsSync(MARK)) {
-  try { mkdirSync(join(homedir(), '.roster'), { recursive: true }); writeFileSync(MARK, new Date().toISOString()) } catch { /* */ }
+  try { ensureRosterDir(); writeFileSync(MARK, new Date().toISOString()) } catch { /* */ }
   if (cmd !== 'auth' && cmd !== 'login') {
     try { const { playBoot } = await import('./lib/banner.mjs'); await playBoot() } catch { /* */ }
   }
@@ -76,16 +77,13 @@ if (TTY && !existsSync(MARK)) {
 // ── auth: interactive, prompts for the token + a little terminal theatre ──
 if (cmd === 'auth') { const { runAuth } = await import('./lib/auth.mjs'); await runAuth(); process.exit(0) }
 
-// ── login / logout: save the token once so you never re-export it ──
-if (cmd === 'login') {
-  const t = (rest[0] || '').trim()
-  if (!t) { console.error('Paste your token:  brello login <token from your admin>'); process.exit(1) }
-  saveToken(t)
-  console.log(c.green('✓') + ' token saved' + c.dim('  ·  try:  ') + c.cyan('brello stats'))
+if (cmd === 'logout') { clearToken(); console.log(c.green('✓') + ' key removed'); process.exit(0) }
+if (cmd === 'whoami') {
+  const t = getToken()
+  console.log(t ? c.green('✓') + ' a key is set' : c.red('✗') + ' no key  ' + c.dim('· run:  ') + c.cyan('brello auth'))
+  if (t) printLegacyHint(t)
   process.exit(0)
 }
-if (cmd === 'logout') { clearToken(); console.log(c.green('✓') + ' token removed'); process.exit(0) }
-if (cmd === 'whoami') { console.log(getToken() ? c.green('✓') + ' a token is set' : c.red('✗') + ' no token  ' + c.dim('· run:  ') + c.cyan('brello auth')); process.exit(0) }
 if (cmd === 'changelog' || cmd === 'whatsnew') {
   console.log('\n' + c.bold('brello changelog') + c.dim('  ·  current  ') + c.cyan('v' + VERSION) + '\n')
   for (const r of CHANGELOG) {
@@ -183,8 +181,9 @@ async function runWrite(name, args, flags) {
     const r = await withSpinner(`${name} · ${card}`, () => callRoster(WRITES[name].q, params))
     const detail = r.detail || (r.comment_id ? 'comment added' : 'done')
     console.log('  ' + c.green('✓') + ' ' + detail)
+    printNotice()
   } catch (e) {
-    console.error('  ' + c.red('✗') + ' ' + (e.message || String(e)))
+    console.error('  ' + c.red('✗') + ' ' + describeError(e))
     process.exit(1)
   }
 }
@@ -225,8 +224,9 @@ async function runCreate(rest) {
       r.due && `due ${r.due}`, r.priority && `${r.priority} priority`,
     ].filter(Boolean).join(c.dim(' · '))
     console.log('  ' + c.green('✓') + ' created ' + c.bold(r.card) + (bits ? '  ' + c.dim(bits) : '') + (r.id ? c.dim('  ·  ' + String(r.id).slice(0, 8)) : ''))
+    printNotice()
   } catch (e) {
-    console.error('  ' + c.red('✗') + ' ' + (e.message || String(e)))
+    console.error('  ' + c.red('✗') + ' ' + describeError(e))
     process.exit(1)
   }
 }
@@ -272,6 +272,8 @@ function printObject(o) {
 // a shared one-line column legend, and friendlier empty-state copy. One source
 // of truth keyed by command NAME (aliases resolved below). ──
 const DETAIL = {
+  auth:        { sum: 'Sign in. Paste your key at a masked prompt; it is checked, then saved to ~/.roster.', extra: `Keys come from ${CONNECT_URL} (by invitation). Run this again any time you get a new key.` },
+  login:       { sum: 'Sign in from a pipe, with no prompt.', extra: 'Reads the key from stdin, checks it like brello auth, then saves it.  e.g.  pbpaste | brello login   Passing the key as an argument is not supported, so it never lands in your shell history.' },
   stats:       { sum: 'A live dashboard for your whole team in one glance.', extra: 'No argument. Shows team size, open / done / overdue counts, what is due this week, cards with no due date, and how many people are tracking time right now.' },
   team:        { sum: 'Your team members — names, departments and roles.', extra: 'No argument. A ● now marker means that person has a live Hubstaff timer.' },
   overdue:     { sum: 'Cards that are past their due date and not yet done.', extra: 'No argument. Sorted oldest-first; the LATE column shows how many days each one has slipped.' },
@@ -373,9 +375,10 @@ function help() {
   const B = tty ? '\x1b[1m' : '', D = tty ? '\x1b[2m' : '', C = tty ? '\x1b[36m' : '', R = tty ? '\x1b[0m' : ''
   const SECTIONS = [
     { title: 'Get started', rows: [
-      ['auth', '', 'Sign in — paste the token your admin gave you'],
-      ['whoami', '', 'Check whether a token is set'],
-      ['logout', '', 'Remove your saved token'],
+      ['auth', '', 'Sign in with your key from ' + CONNECT_URL],
+      ['login', '< key', 'Sign in from a pipe, e.g.  pbpaste | brello login'],
+      ['whoami', '', 'Check whether a key is set'],
+      ['logout', '', 'Remove your saved key'],
       ['changelog', '', "What's new — every release"],
     ] },
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'leaves', 'departments'] },
@@ -417,10 +420,27 @@ if (cmd === 'help') { helpFor((rest[0] || '').trim()); process.exit(0) }
 // also support  brello <command> --help / -h  → the focused panel for that command
 if (rest.includes('--help') || rest.includes('-h')) { helpFor(cmd); process.exit(0) }
 
+if (cmd === 'login') {
+  if (rest.some(a => !a.startsWith('--'))) {
+    console.error(c.red('✖') + ' brello login no longer takes the key as an argument, so it stays out of your shell history.')
+    console.error('  run  ' + c.cyan('brello auth') + '  (masked prompt)  or  ' + c.cyan('pbpaste | brello login'))
+    process.exit(1)
+  }
+  if (process.stdin.isTTY) { const { runAuth } = await import('./lib/auth.mjs'); await runAuth(); process.exit(0) }
+  const { runLoginFromStdin } = await import('./lib/auth.mjs')
+  await runLoginFromStdin()
+  process.exit(0)
+}
+
 // global flags: --board widens card queries to the whole board; --unassigned filters
 // to no-assignee; --undo / --restore feed the write commands.
 const flags = new Set(rest.filter(a => a.startsWith('--')))
 const args = rest.filter(a => !a.startsWith('--'))
+
+if (COMMANDS[cmd] || WRITES[cmd] || cmd === 'create' || cmd === 'new') {
+  const t = getToken()
+  if (t && isLegacyKey(t)) printLegacyHint(t)
+}
 
 // create mints a NEW card (title + value flags), so it parses `rest` itself
 // rather than going through the card-ref write path.
@@ -494,15 +514,8 @@ try {
   } else printObject(r.data)
   if (r.note) console.log('\n  ' + c.dim('▸ ') + c.amber(r.note))
   console.log(c.dim(`\n  ↳ brello help  ·  for everything you can ask\n`))
+  printNotice('\n\n')
 } catch (e) {
-  const m = e.message || String(e)
-  if (/NO_TOKEN/.test(m)) console.error('✖ No token yet. Get one from your admin, then run:  brello auth')
-  else if (/invalid or expired/.test(m)) console.error('✖ Your token is invalid or has expired — ask your admin for a fresh one.')
-  else if (/no scope|token has no scope/.test(m)) console.error('✖ Your token has no department scope — ask your admin to mint a fresh one.')
-  else if (/admin-scope only|admin only/.test(m)) console.error('✖ That one is admin-only — your token does not have access.')
-  else if (/rate limit/i.test(m)) console.error('✖ Easy there — too many requests in a minute. Wait a moment and try again.')
-  else if (/Network error|fetch failed|ENOTFOUND|ETIMEDOUT|ECONNREFUSED/i.test(m)) console.error('✖ Could not reach the roster — check your internet and try again.')
-  else if (/not configured/i.test(m)) console.error('✖ That feature is not set up yet on the server — ask your admin.')
-  else console.error('✖ Something went wrong: ' + m + '\n  ' + (process.stdout.isTTY ? '\x1b[2m' : '') + '↳ if this keeps happening, run  brello whoami  and share it with your admin.' + (process.stdout.isTTY ? '\x1b[0m' : ''))
+  console.error('✖ ' + describeError(e))
   process.exit(1)
 }

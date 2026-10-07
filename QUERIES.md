@@ -63,7 +63,7 @@ created:        Jun 05        last activity: Jun 18
 
 | | |
 |---|---|
-| Requests | 180 / minute per token (CLI and MCP share the budget) |
+| Requests | 180 / minute per key (CLI and MCP share the budget) |
 | `search` | up to 50 cards |
 | `comments`, `reactions` | latest 40 |
 | `leaves` | next 60 upcoming |

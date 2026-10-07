@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Acceptance tests for the board-scope contract (run: npm test).
-// Drives the real MCP server over stdio with YOUR token (~/.roster/token or
-// BRELLO_TOKEN) against the LIVE roster-query edge fn — read-only queries only.
+// Drives the real MCP server over stdio with the key brello auth saved
+// (~/.roster/token) against the LIVE roster-query edge fn, query tools only.
 // Counts are asserted as invariants (board ⊇ team), not fixed numbers.
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -11,7 +11,7 @@ await client.connect(new StdioClientTransport({ command: process.execPath, args:
 
 let pass = 0, fail = 0
 const ok = (cond, label) => { cond ? pass++ : fail++; console.log(`${cond ? '  ✓' : '  ✗ FAIL'} ${label}`) }
-const call = async (name, args = {}) => JSON.parse((await client.callTool({ name, arguments: args })).content[0].text)
+const call = async (name, args = {}) => JSON.parse((await client.callTool({ name, arguments: args })).content[0].text.replace(/\nNotice: .*$/, ''))
 
 // 0) The tools + schemas actually exist
 const { tools } = await client.listTools()

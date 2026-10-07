@@ -1,19 +1,36 @@
 #!/usr/bin/env node
-// Roster MCP server (stdio) — uses your ROSTER_TOKEN.
+// Roster MCP server (stdio), uses the key `brello auth` saved.
 // Gives Claude direct tools to query Roster instead of hand-written SQL.
-// Register in Claude Code / claude_desktop_config.json (see README).
+// Register:  claude mcp add brello -- brello-mcp   (Claude Desktop: see README).
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { callRoster } from './lib/client.mjs'
+import { callRoster, getToken, isLegacyKey, LEGACY_HINT, describeError, noticeOf } from './lib/client.mjs'
 import { CHANGELOG, VERSION } from './lib/changelog.mjs'
 
 const server = new McpServer({ name: 'roster-brello', version: VERSION })
 
-const asText = (r) => ({ content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] })
+const log = (s) => { try { process.stderr.write('[roster-mcp] ' + s + '\n') } catch {} }
+process.on('unhandledRejection', (e) => log('unhandled: ' + describeError(e)))
+
+let legacyWarned = false
+function warnIfLegacy() {
+  if (legacyWarned) return
+  const t = getToken()
+  if (t && isLegacyKey(t)) { legacyWarned = true; log(LEGACY_HINT) }
+}
+
+function asText(r) {
+  const notice = noticeOf(r)
+  let body = r
+  if (notice && r && typeof r === 'object' && !Array.isArray(r)) { const { notice: _n, ...rest } = r; body = rest }
+  const text = JSON.stringify(body, null, 2) + (notice ? '\nNotice: ' + notice : '')
+  return { content: [{ type: 'text', text }] }
+}
+const asError = (e) => ({ content: [{ type: 'text', text: 'Error: ' + describeError(e) }], isError: true })
 const wrap = (query, mapParams = () => ({})) => async (args) => {
-  try { return asText(await callRoster(query, mapParams(args || {}))) }
-  catch (e) { return { content: [{ type: 'text', text: 'Error: ' + e.message }], isError: true } }
+  try { warnIfLegacy(); return asText(await callRoster(query, mapParams(args || {}))) }
+  catch (e) { return asError(e) }
 }
 
 server.tool('roster_stats', 'Dashboard totals: open/done/overdue cards and who is tracking now. Default scope "team" = your team\'s cards (reports team_size) — pass scope "board" for whole-board totals (reports people_with_cards + unassigned_cards instead).', { scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('stats', a => (a.scope ? { scope: a.scope } : {})))
@@ -95,5 +112,6 @@ server.tool('roster_rename', 'Rename a card', { card: z.string().describe('card 
 server.tool('roster_describe', 'Set a card’s description', { card: z.string().describe('card id or exact card name'), description: z.string().describe('the new description text') }, wrap('describe', a => ({ card: a.card, description: a.description })))
 server.tool('roster_archive', 'Archive a card, or restore it', { card: z.string().describe('card id or exact card name'), restore: z.boolean().optional().describe('omit/false archives the card; true restores it') }, wrap('archive', a => ({ card: a.card, ...(typeof a.restore === 'boolean' ? { restore: a.restore } : {}) })))
 
+warnIfLegacy()
 await server.connect(new StdioServerTransport())
-console.error('[roster-mcp] ready')
+log('ready v' + VERSION)

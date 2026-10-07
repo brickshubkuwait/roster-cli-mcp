@@ -33,5 +33,6 @@ repo. Backend changes happen THERE; this repo is the client.
 
 ## Testing
 
-- `npm test` needs a valid token in `~/.roster/token` (or BRELLO_TOKEN).
+- `npm test` needs a valid key saved by `brello auth` (`~/.roster/token`). Keys come
+  from roster.bricks.com.kw/connect; never paste a key into a config file or doc.
 - Counts change daily — assert invariants (board >= team), never fixed numbers.

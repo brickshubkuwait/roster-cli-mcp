@@ -1,6 +1,6 @@
 {
   "name": "brello",
-  "version": "1.8.2",
+  "version": "1.9.0",
   "private": false,
   "type": "module",
   "description": "Roster CLI + MCP — query your team's work from the terminal or Claude",

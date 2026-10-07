@@ -14,16 +14,15 @@ active now: 2
 
 ```bash
 npm install -g brello
-```
-
-Then sign in — paste the token your admin gave you (saved, so you only do it once):
-
-```bash
 brello auth
 brello stats
 ```
 
-> Need a token? Ask your admin to issue one.
+`brello auth` asks for your key at a masked prompt, checks it, and saves it to
+`~/.roster` (only your user can read it), so you only do it once.
+
+> Need a key? Get one at [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect) (by invitation).
+> Already copied it? `pbpaste | brello login` signs in straight from the clipboard.
 > The command is `brello` (typing `roster` works too).
 
 <details><summary>Install from source instead</summary>
@@ -68,16 +67,24 @@ Run `brello help` to see them all. Full reference: [QUERIES.md](./QUERIES.md).
 
 | Surface | Limit |
 |---|---|
-| CLI (`brello …`) | 180 requests / minute per token |
-| MCP (Claude tools) | 180 requests / minute per token (shared with the CLI) |
+| CLI (`brello …`) | 180 requests / minute per key |
+| MCP (Claude tools) | 180 requests / minute per key (shared with the CLI) |
 
 Each call returns a sensible page: `search` up to 50 cards, `comments` / `reactions` the latest 40, `leaves` the next 60 upcoming.
 
 ## Use it from Claude (MCP)
 
-The global install also adds a `brello-mcp` command. If you've run `brello auth`,
-Claude reuses that sign-in — just add this to `~/.claude.json` and ask in plain
-English (*"what's overdue for my team?"*, *"who's off next week?"*):
+The global install also adds a `brello-mcp` command. Run `brello auth` first;
+Claude reuses that sign-in. Then ask in plain English
+(*"what's overdue for my team?"*, *"who's off next week?"*).
+
+**Claude Code**
+
+```bash
+claude mcp add brello -- brello-mcp
+```
+
+**Claude Desktop**: add this to `claude_desktop_config.json`
 
 ```json
 {
@@ -89,5 +96,12 @@ English (*"what's overdue for my team?"*, *"who's off next week?"*):
 }
 ```
 
-> No path, no token — the server reads the one `brello auth` saved.
-> To pin a specific token, add `"env": { "BRELLO_TOKEN": "..." }`.
+> No path and no key in the config. The server reads the key `brello auth` saved.
+> Got a new key? Run `brello auth` again; Claude picks it up on the next question.
+
+## Keys
+
+- Keys come from [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect). Renew, pause or replace them there.
+- If a key expires, is paused, or hits the rate limit, brello tells you why and what to do next.
+- When the server has a heads up for you (for example, your key expires in a few days), the CLI prints it after your results and Claude sees it as a final `Notice:` line.
+- Old style keys are retired. If you still have one, get a new key at the link above and run `brello auth`.
