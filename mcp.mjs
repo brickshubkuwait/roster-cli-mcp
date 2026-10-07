@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { developerGuide } from './lib/docs.mjs'
 // Roster MCP server (stdio), uses the key `brello auth` saved.
 // Gives Claude direct tools to query Roster instead of hand-written SQL.
 // Register:  claude mcp add brello -- brello-mcp   (Claude Desktop: see README).
@@ -71,6 +72,7 @@ server.tool('roster_done', 'Your team\'s recently completed cards — the last N
 server.tool('roster_blocked', 'Your team\'s blocked or stuck cards — explicit blockers, or overdue by 3+ days (team scope only)', {}, wrap('blocked'))
 server.tool('roster_recent', 'Recently touched cards across your team (default 20)', { n: z.number().optional().describe('how many, default 20') }, wrap('recent', a => (a.n ? { n: a.n } : {})))
 server.tool('roster_now', 'Live pulse — who is tracking now, what is due today, and the latest card moves', {}, wrap('now'))
+server.tool('roster_docs', 'Developer hub links and current key setup, permissions, limits and recovery guidance. Local help, no API request.', {}, async () => asText(developerGuide()))
 server.tool('roster_changelog', `Brello release history — what changed in every version of this CLI/MCP (installed: v${VERSION}). Answers "what's new?" without a network call.`, {}, async () => asText({ ok: true, installed: VERSION, releases: CHANGELOG }))
 server.tool('roster_ps_issues', 'Open Product Support issues (admin only)', {}, wrap('ps_issues'))
 server.tool('roster_audit', 'Access log: who queried what and when (admin only)', {}, wrap('audit'))

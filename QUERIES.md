@@ -1,5 +1,7 @@
 # Commands
 
+The [Developer hub](https://roster.bricks.com.kw/developers#reference) has the searchable CLI and MCP reference. Run `brello docs` for links, or `brello help keys` for key setup and recovery.
+
 What each command returns.
 
 | Command | Returns |
@@ -18,6 +20,8 @@ What each command returns.
 | `stages` | The board's workflow stages (lists) with your team's open card count in each. |
 | `departments` | The roster's departments and their headcount. |
 | `shoots` | The whole shoot schedule, company-wide — date, client, type, crew (recent + upcoming). |
+
+CLI and MCP share the same per-key budget. Self-service keys see your team’s cards even when `--board` is supplied. Write actions need approval, assignments stay within your team, and archive is unavailable. Self-service responses omit share/open URLs, invoice details and delivery recipients.
 
 ## Card fields
 
@@ -63,7 +67,8 @@ created:        Jun 05        last activity: Jun 18
 
 | | |
 |---|---|
-| Requests | 180 / minute per key (CLI and MCP share the budget) |
+| Self-service requests | 60 / minute + 3,000 / rolling day per key |
+| Administrator-issued requests | 180 / minute per key |
 | `search` | up to 50 cards |
 | `comments`, `reactions` | latest 40 |
 | `leaves` | next 60 upcoming |

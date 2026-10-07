@@ -6,6 +6,7 @@
 import { callRoster, QUERIES, clearToken, getToken, ensureRosterDir, describeError, isLegacyKey, CONNECT_URL } from './lib/client.mjs'
 import { printNotice, printLegacyHint } from './lib/auth.mjs'
 import { CHANGELOG, VERSION } from './lib/changelog.mjs'
+import { DOCS_URL, KEYS_URL, KEY_GUIDE } from './lib/docs.mjs'
 import { homedir } from 'node:os'
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -75,6 +76,10 @@ if (TTY && !existsSync(MARK)) {
 }
 
 // ── auth: interactive, prompts for the token + a little terminal theatre ──
+if (cmd === 'docs') {
+  console.log(`Developer hub: ${DOCS_URL}\nMy keys: ${KEYS_URL}\nKey help: brello help keys`)
+  process.exit(0)
+}
 if (cmd === 'auth') { const { runAuth } = await import('./lib/auth.mjs'); await runAuth(); process.exit(0) }
 
 if (cmd === 'logout') { clearToken(); console.log(c.green('✓') + ' key removed'); process.exit(0) }
@@ -272,6 +277,8 @@ function printObject(o) {
 // a shared one-line column legend, and friendlier empty-state copy. One source
 // of truth keyed by command NAME (aliases resolved below). ──
 const DETAIL = {
+  docs: { sum: 'Developer hub, setup guides, commands and troubleshooting.', extra: DOCS_URL },
+  keys: { sum: 'Request, use and renew your Brello key.', extra: KEY_GUIDE.join('\n\n') + '\n\nMy keys: ' + KEYS_URL },
   auth:        { sum: 'Sign in. Paste your key at a masked prompt; it is checked, then saved to ~/.roster.', extra: `Keys come from ${CONNECT_URL} (by invitation). Run this again any time you get a new key.` },
   login:       { sum: 'Sign in from a pipe, with no prompt.', extra: 'Reads the key from stdin, checks it like brello auth, then saves it.  e.g.  pbpaste | brello login   Passing the key as an argument is not supported, so it never lands in your shell history.' },
   stats:       { sum: 'A live dashboard for your whole team in one glance.', extra: 'No argument. Shows team size, open / done / overdue counts, what is due this week, cards with no due date, and how many people are tracking time right now.' },
@@ -285,14 +292,14 @@ const DETAIL = {
   activity:    { sum: 'A feed of everything that happened on your team’s cards.', extra: 'No argument. Moves between stages, comments, reassignments, splits and edits — newest first.' },
   search:      { sum: 'Find cards by title or client name.', extra: 'Argument: the text to look for (quote it if it has spaces).  e.g.  brello search "reel"' },
   user:        { sum: 'A full dossier for one person — every card they own.', extra: 'Argument: a name (full or partial).  Shows live AND archived cards, their totals, and what they are tracking now.  e.g.  brello user Samer' },
-  card:        { sum: 'Everything about a single card.', extra: 'Argument: a card id (the first 8 characters are enough). Shows workflow, tracked effort, Salesforce opportunity/invoice, Studio submissions, client send/view receipt, Slack thread, deliverable sizes and approved EN/AR copy. e.g. brello card 1c11685c' },
+  card:        { sum: 'Everything about a single card.', extra: 'Argument: a card id (the first 8 characters are enough). Shows workflow, tracked effort, Studio submissions, review context, Slack thread, deliverable sizes and approved EN/AR copy. Self-service keys omit share/open URLs, invoices and delivery recipients. e.g. brello card 1c11685c' },
   stages:      { sum: 'The board’s workflow stages and how full each one is.', extra: 'No argument. CARDS = your team’s open cards in that stage; OVERDUE = how many of those are late.' },
   departments: { sum: 'The roster’s departments and their headcount.', extra: 'No argument. ACTIVE NOW = how many people in each department are tracking time.' },
-  shoots:      { sum: 'The shoot schedule — recent and upcoming (company-wide).', extra: 'No argument. Not department-scoped: anyone can see when a shoot is and who is on the crew.' },
-  studio:      { sum: 'The Bricks Studio review feed — what is out for review.', extra: 'Optional argument: filter by submission, card or client name. Add --board for the whole board. Shows status, version, comments, client-view receipt and Studio links. e.g. brello studio reel' },
+  shoots:      { sum: 'The shoot schedule — recent and upcoming (company-wide).', extra: 'No argument. The company-wide schedule shows when a shoot is and who is on the crew.' },
+  studio:      { sum: 'The Bricks Studio review feed — what is out for review.', extra: 'Optional argument: filter by submission, card or client name. Shows status, version, comments and client-view receipt. Self-service keys stay with your team and omit share/open URLs, even with --board. e.g. brello studio reel' },
   client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).  e.g.  brello client Foodhall' },
   due:         { sum: 'Cards coming due soon — or set one card’s due date.', extra: 'With a number (or nothing): your team’s cards due in the next N days (default 7).  With a card id/name + a date: sets that card’s due date; pass "clear" to remove it.  e.g.  brello due 3   ·   brello due 1c11685c 2026-07-20' },
-  done:        { sum: 'Cards your team finished recently — or mark one done.', extra: 'With a number (or nothing): cards completed in the last N days (default 7).  With a card id/name: marks that card done; add --undo to reopen it.  e.g.  brello done 14   ·   brello done 1c11685c' },
+  done:        { sum: 'Cards your team finished recently — or mark one done.', extra: 'With a number (or nothing): cards completed in the last N days (default 14).  With a card id/name: marks that card done; add --undo to reopen it.  e.g.  brello done 14   ·   brello done 1c11685c' },
   create:      { sum: 'Create a new card on the board.', extra: 'Argument: the card title in quotes. Everything else is an optional value flag: --list "<stage>" (default: the board’s first list), --assignee <name|id>, --due YYYY-MM-DD, --client "<tag>", --dept <department>, --priority <top|high|medium|low>, --desc "<brief>".  e.g.  brello create "Spirit Felice Bahrain artwork" --assignee Abrar --due 2026-07-22 --dept Design' },
   comment:     { sum: 'Add a comment to a card.', extra: 'Arguments: a card (id or exact name) then the comment text.  e.g.  brello comment 1c11685c "final cut is up"' },
   move:        { sum: 'Move a card to another list.', extra: 'Arguments: a card (id or exact name) then the list name.  e.g.  brello move 1c11685c In Progress' },
@@ -300,7 +307,7 @@ const DETAIL = {
   assign:      { sum: 'Assign a card to someone — or unassign it.', extra: 'Arguments: a card (id or exact name) then a name (or Uxxxx slack id) — or "none" to unassign.  e.g.  brello assign 1c11685c Samer' },
   rename:      { sum: 'Rename a card.', extra: 'Arguments: a card (id or exact name) then the new title.  e.g.  brello rename 1c11685c New title' },
   describe:    { sum: 'Set a card’s description.', extra: 'Arguments: a card (id or exact name) then the description text.  e.g.  brello describe 1c11685c "the full brief"' },
-  archive:     { sum: 'Archive a card — or restore it.', extra: 'Argument: a card (id or exact name).  Add --restore to bring it back.  e.g.  brello archive 1c11685c' },
+  archive:     { sum: 'Archive a card — or restore it.', extra: 'Unavailable to self-service keys. Requires an administrator-issued key with archive access. Argument: a card (id or exact name). Add --restore to bring it back.  e.g.  brello archive 1c11685c' },
   blocked:     { sum: 'Cards that are stuck waiting on something else.', extra: 'No argument. Shows what each card is blocked by.' },
   recent:      { sum: 'The newest cards and changes across your team.', extra: 'No argument. A quick "what’s new" since you last looked.' },
   now:         { sum: 'A live snapshot of who is working on what right now.', extra: 'No argument. Like active, focused on the current moment.' },
@@ -360,7 +367,7 @@ function helpFor(name) {
   const def = COMMANDS[key] || COMMANDS[name] || WRITES[key]
   const d = DETAIL[key]
   if (!def && !d) { console.error(`I don't have a help page for "${name}".`); help(); return }
-  const usage = 'brello ' + key + (def?.arg ? ' ' + def.arg : '')
+  const usage = 'brello ' + (key === 'keys' ? 'help keys' : key) + (def?.arg ? ' ' + def.arg : '')
   console.log(`\n${c.cyan('❯')} ${c.bold(usage)}${def?.admin ? '  ' + c.amber('· admin only') : ''}`)
   if (d?.sum) console.log('  ' + d.sum)
   if (d?.extra) console.log('\n  ' + c.dim(d.extra))
@@ -375,6 +382,8 @@ function help() {
   const B = tty ? '\x1b[1m' : '', D = tty ? '\x1b[2m' : '', C = tty ? '\x1b[36m' : '', R = tty ? '\x1b[0m' : ''
   const SECTIONS = [
     { title: 'Get started', rows: [
+      ['docs', '', 'Developer hub, setup and command reference'],
+      ['help keys', '', 'Key permissions, limits, renewal and recovery'],
       ['auth', '', 'Sign in with your key from ' + CONNECT_URL],
       ['login', '< key', 'Sign in from a pipe, e.g.  pbpaste | brello login'],
       ['whoami', '', 'Check whether a key is set'],
@@ -411,6 +420,8 @@ function help() {
     }
     console.log('')
   }
+  console.log(`${D}  docs: ${DOCS_URL}${R}`)
+  console.log(`${D}  self-service keys: your team, approved actions, 60/min + 3,000/day. Run brello help keys.${R}`)
   console.log(`${D}  examples:  brello user Samer   ·   brello studio reel   ·   brello card 1c11685c${R}`)
   console.log(`${D}  new here?  run  ${R}${C}brello auth${R}${D}  first, then  ${R}${C}brello stats${R}\n`)
 }

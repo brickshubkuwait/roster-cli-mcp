@@ -19,7 +19,7 @@ brello stats
 ```
 
 `brello auth` asks for your key at a masked prompt, checks it, and saves it to
-`~/.roster` (only your user can read it), so you only do it once.
+`~/.roster` (only your user can read it), until you renew or replace the key. Run `brello auth` again with the replacement.
 
 > Need a key? Get one at [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect) (by invitation).
 > Already copied it? `pbpaste | brello login` signs in straight from the clipboard.
@@ -33,6 +33,17 @@ cd roster-cli-mcp && npm install && npm link
 brello auth
 ```
 </details>
+
+## Developer hub
+
+Open [Bricks Developers](https://roster.bricks.com.kw/developers) for setup guides, the searchable CLI/MCP reference, workflows and troubleshooting.
+
+```bash
+brello docs
+brello help keys
+```
+
+Claude can use the `roster_docs` tool for the same links and key guidance, without an API call.
 
 ## CLI
 
@@ -67,8 +78,10 @@ Run `brello help` to see them all. Full reference: [QUERIES.md](./QUERIES.md).
 
 | Surface | Limit |
 |---|---|
-| CLI (`brello …`) | 180 requests / minute per key |
-| MCP (Claude tools) | 180 requests / minute per key (shared with the CLI) |
+| Self-service key | 60 requests / minute + 3,000 / rolling day |
+| Administrator-issued key | 180 requests / minute |
+
+CLI and MCP share the same budget per key. Self-service card access stays with your team, even with `--board`. Write actions need individual approval, assignments stay within your team, and archive is unavailable. Self-service responses omit share/open URLs, invoice details and delivery recipients.
 
 Each call returns a sensible page: `search` up to 50 cards, `comments` / `reactions` the latest 40, `leaves` the next 60 upcoming.
 
@@ -101,6 +114,9 @@ claude mcp add brello -- brello-mcp
 
 ## Keys
 
+- Self-service keys are invitation-only and last 30 days. An approval can be claimed for 24 hours, with a sign-in within the last 10 minutes. The key is shown once.
+- Renew in My keys when eligible. Revealing the renewal replaces and revokes the old key. Run `brello auth` on each device using it.
+- `brello logout` only removes the local copy. Revoke a lost key in My keys.
 - Keys come from [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect). Renew or replace them there.
 - If a key expires, is paused, or hits the rate limit, brello tells you why and what to do next.
 - When the server has a heads up for you (for example, your key expires in a few days), the CLI prints it after your results and Claude sees it as a final `Notice:` line.
