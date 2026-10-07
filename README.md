@@ -101,7 +101,7 @@ claude mcp add brello -- brello-mcp
 
 ## Keys
 
-- Keys come from [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect). Renew, pause or replace them there.
+- Keys come from [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect). Renew or replace them there.
 - If a key expires, is paused, or hits the rate limit, brello tells you why and what to do next.
 - When the server has a heads up for you (for example, your key expires in a few days), the CLI prints it after your results and Claude sees it as a final `Notice:` line.
 - Old style keys are retired. If you still have one, get a new key at the link above and run `brello auth`.
