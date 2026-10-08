@@ -134,11 +134,11 @@ const COMMANDS = {
 // unique card name. `q` is the server action; `arg` is the usage hint.
 const WRITES = {
   comment:  { q: 'comment',      arg: '<card> <text…>' },
-  move:     { q: 'move',         arg: '<card> <list…>' },
-  due:      { q: 'set_due',      arg: '<card> <date|clear>' },
+  move:     { q: 'move',         arg: '<card> <list…> [--reason "<why>"]' },
+  due:      { q: 'set_due',      arg: '<card> <date|clear> [--reason "<why>"]' },
   done:     { q: 'mark_done',    arg: '<card> [--undo]' },
   priority: { q: 'set_priority', arg: '<card> <top|high|medium|low|none>' },
-  assign:   { q: 'assign',       arg: '<card> <name…|none>' },
+  assign:   { q: 'assign',       arg: '<card> <name…|none> [--reason "<why>"]' },
   rename:   { q: 'rename',       arg: '<card> <new name…>' },
   describe: { q: 'describe',     arg: '<card> <text…>' },
   archive:  { q: 'archive',      arg: '<card> [--restore]' },
@@ -151,7 +151,12 @@ function wantsWrite(name, args) {
   if (!COMMANDS[name]) return true
   return args.length > 0 && !isNumericArg(args[0])
 }
-async function runWrite(name, args, flags) {
+const REASON_WRITES = new Set(['move', 'due', 'assign'])
+const CLI_HINTS = {
+  DUE_REQUIRED: 'Set one first with  brello due <card> YYYY-MM-DD, then move it again',
+  REASON_REQUIRED: 'Run it again with  --reason "<why>"',
+}
+async function runWrite(name, args, flags, reason = null) {
   const card = (args[0] || '').trim()
   if (!card) { console.error(`Add a card id or name, e.g.   brello ${name} 1c11685c …`); process.exit(1) }
   const tail = args.slice(1)
@@ -182,13 +187,18 @@ async function runWrite(name, args, flags) {
   } else if (name === 'archive') {
     if (flags.has('--restore')) params.restore = true
   }
+  if (reason !== null) {
+    if (!REASON_WRITES.has(name)) { console.error('--reason works with move, due and assign.'); process.exit(1) }
+    if (!reason.trim()) { console.error('Add the reason text, e.g.   brello due 1c11685c 2026-10-20 --reason "client moved the shoot"'); process.exit(1) }
+    params.reason = reason.trim()
+  }
   try {
     const r = await withSpinner(`${name} · ${card}`, () => callRoster(WRITES[name].q, params))
     const detail = r.detail || (r.comment_id ? 'comment added' : 'done')
     console.log('  ' + c.green('✓') + ' ' + detail)
     printNotice()
   } catch (e) {
-    console.error('  ' + c.red('✗') + ' ' + describeError(e))
+    console.error('  ' + c.red('✗') + ' ' + describeError(e, { hints: CLI_HINTS }))
     process.exit(1)
   }
 }
@@ -298,13 +308,13 @@ const DETAIL = {
   shoots:      { sum: 'The shoot schedule — recent and upcoming (company-wide).', extra: 'No argument. The company-wide schedule shows when a shoot is and who is on the crew.' },
   studio:      { sum: 'The Bricks Studio review feed — what is out for review.', extra: 'Optional argument: filter by submission, card or client name. Shows status, version, comments and client-view receipt. Self-service keys stay with your team and omit share/open URLs, even with --board. e.g. brello studio reel' },
   client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).  e.g.  brello client Foodhall' },
-  due:         { sum: 'Cards coming due soon — or set one card’s due date.', extra: 'With a number (or nothing): your team’s cards due in the next N days (default 7).  With a card id/name + a date: sets that card’s due date; pass "clear" to remove it.  e.g.  brello due 3   ·   brello due 1c11685c 2026-07-20' },
+  due:         { sum: 'Cards coming due soon — or set one card’s due date.', extra: 'With a number (or nothing): your team’s cards due in the next N days (default 7).  With a card id/name + a date: sets that card’s due date; pass "clear" to remove it. Moving a missed due date later needs  --reason "<why>"  (REASON_REQUIRED).  e.g.  brello due 3   ·   brello due 1c11685c 2026-07-20 --reason "client moved the shoot"' },
   done:        { sum: 'Cards your team finished recently — or mark one done.', extra: 'With a number (or nothing): cards completed in the last N days (default 14).  With a card id/name: marks that card done; add --undo to reopen it.  e.g.  brello done 14   ·   brello done 1c11685c' },
   create:      { sum: 'Create a new card on the board.', extra: 'Argument: the card title in quotes. Everything else is an optional value flag: --list "<stage>" (default: the board’s first list), --assignee <name|id>, --due YYYY-MM-DD, --client "<tag>", --dept <department>, --priority <top|high|medium|low>, --desc "<brief>".  e.g.  brello create "Spirit Felice Bahrain artwork" --assignee Abrar --due 2026-07-22 --dept Design' },
   comment:     { sum: 'Add a comment to a card.', extra: 'Arguments: a card (id or exact name) then the comment text.  e.g.  brello comment 1c11685c "final cut is up"' },
-  move:        { sum: 'Move a card to another list.', extra: 'Arguments: a card (id or exact name) then the list name.  e.g.  brello move 1c11685c In Progress' },
+  move:        { sum: 'Move a card to another list.', extra: 'Arguments: a card (id or exact name) then the list name. Leaving Backlog needs a due date first (DUE_REQUIRED). Optional  --reason "<why>"  is recorded on the card.  e.g.  brello move 1c11685c In Progress' },
   priority:    { sum: 'Set or clear a card’s priority.', extra: 'Arguments: a card (id or exact name) then top / high / medium / low — or "none" to clear it.  e.g.  brello priority 1c11685c high' },
-  assign:      { sum: 'Assign a card to someone — or unassign it.', extra: 'Arguments: a card (id or exact name) then a name (or Uxxxx slack id) — or "none" to unassign.  e.g.  brello assign 1c11685c Samer' },
+  assign:      { sum: 'Assign a card to someone — or unassign it.', extra: 'Arguments: a card (id or exact name) then a name (or Uxxxx slack id) — or "none" to unassign. Optional  --reason "<why>"  is recorded on the card.  e.g.  brello assign 1c11685c Samer' },
   rename:      { sum: 'Rename a card.', extra: 'Arguments: a card (id or exact name) then the new title.  e.g.  brello rename 1c11685c New title' },
   describe:    { sum: 'Set a card’s description.', extra: 'Arguments: a card (id or exact name) then the description text.  e.g.  brello describe 1c11685c "the full brief"' },
   archive:     { sum: 'Archive a card — or restore it.', extra: 'Unavailable to self-service keys. Requires an administrator-issued key with archive access. Argument: a card (id or exact name). Add --restore to bring it back.  e.g.  brello archive 1c11685c' },
@@ -396,11 +406,11 @@ function help() {
     { title: 'Act on cards', rows: [
       ['create', '"<title>" [flags]', 'Create a new card (--assignee --due --client --dept --priority --list)'],
       ['comment', '<card> <text>', 'Add a comment to a card'],
-      ['move', '<card> <list>', 'Move a card to another list'],
-      ['due', '<card> <date>', 'Set or clear a card’s due date'],
+      ['move', '<card> <list>', 'Move a card to another list (--reason)'],
+      ['due', '<card> <date>', 'Set or clear a card’s due date (--reason)'],
       ['done', '<card>', 'Mark a card done (--undo reopens)'],
       ['priority', '<card> <level>', 'Set or clear a card’s priority'],
-      ['assign', '<card> <who>', 'Assign a card (none unassigns)'],
+      ['assign', '<card> <who>', 'Assign a card, none unassigns (--reason)'],
       ['rename', '<card> <name>', 'Rename a card'],
       ['describe', '<card> <text>', 'Set a card’s description'],
       ['archive', '<card>', 'Archive a card (--restore brings it back)'],
@@ -445,6 +455,11 @@ if (cmd === 'login') {
 
 // global flags: --board widens card queries to the whole board; --unassigned filters
 // to no-assignee; --undo / --restore feed the write commands.
+let reason = null
+for (let i = 0; i < rest.length; i++) {
+  if (rest[i] === '--reason') { reason = rest[i + 1] ?? ''; rest.splice(i, 2); break }
+  if (rest[i].startsWith('--reason=')) { reason = rest[i].slice('--reason='.length); rest.splice(i, 1); break }
+}
 const flags = new Set(rest.filter(a => a.startsWith('--')))
 const args = rest.filter(a => !a.startsWith('--'))
 
@@ -460,7 +475,8 @@ if (cmd === 'create' || cmd === 'new') { await runCreate(rest); process.exit(0) 
 // write commands act on one card (comment/move/due/done/priority/assign/rename/
 // describe/archive). due & done double as read commands: a non-numeric first arg
 // ("brello due 1c11685c 2026-07-20") acts on that card; a number or nothing reads.
-if (wantsWrite(cmd, args)) { await runWrite(cmd, args, flags); process.exit(0) }
+if (wantsWrite(cmd, args)) { await runWrite(cmd, args, flags, reason); process.exit(0) }
+if (reason !== null) { console.error('--reason works with move, due and assign.'); process.exit(1) }
 
 const def = COMMANDS[cmd]
 if (!def) { console.error(`I don't know "${cmd}".`); help(); process.exit(1) }

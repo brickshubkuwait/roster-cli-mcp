@@ -74,6 +74,8 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 
 Run `brello help` to see them all. Full reference: [QUERIES.md](./QUERIES.md).
 
+Card changes (`brello move`, `brello due <card> <date>`, `brello assign`) take `--reason "<why>"`, which is recorded on the card. Taking a card out of Backlog needs a due date first (`DUE_REQUIRED`), and moving a missed due date to a later day needs a reason (`REASON_REQUIRED`).
+
 ## Limits
 
 | Surface | Limit |
