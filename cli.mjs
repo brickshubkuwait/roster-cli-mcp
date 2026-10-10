@@ -8,6 +8,7 @@ import { callRoster, QUERIES, clearToken, getToken, ensureRosterDir, describeErr
 import { printNotice, printLegacyHint } from './lib/auth.mjs'
 import { CHANGELOG, VERSION } from './lib/changelog.mjs'
 import { DOCS_URL, KEYS_URL, KEY_GUIDE } from './lib/docs.mjs'
+import { parseScopeArgs, deliverableRows, extraRows, entryHeading } from './lib/scope.mjs'
 import { homedir } from 'node:os'
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -142,6 +143,7 @@ const COMMANDS = {
   user:        { q: 'user', arg: '<name>' },
   card:        { q: 'card', arg: '<id>' },
   client:      { q: 'client', arg: '"<name>"' },
+  scope:       { q: 'scope', arg: '"<client>" --month YYYY-MM [--json]' },
   due:         { q: 'due', arg: '[days]' },
   done:        { q: 'done', arg: '[days]' },
   blocked:     { q: 'blocked' },
@@ -280,6 +282,45 @@ async function runCreate(rest) {
   }
 }
 
+// scope: contracted vs shot vs delivered for one client and month. --json
+// prints the gateway response untouched; otherwise one table per contract.
+async function runScope(rest) {
+  const a = parseScopeArgs(rest)
+  if (a.error) { console.error(a.error); process.exit(1) }
+  const params = { client: a.client, ...(a.month ? { month: a.month } : {}) }
+  let r
+  try {
+    r = await withSpinner(`scope · ${a.client}`, () => callRoster('scope', params))
+  } catch (e) {
+    if (JSON_OUT) emitError(e)
+    console.error('✖ ' + describeError(e))
+    process.exit(1)
+  }
+  // The global --json is taken off argv before commands see it, so honour JSON_OUT too.
+  if (a.json || JSON_OUT) { emit(r); printNotice(); return }
+  if (!r.client) {
+    console.log('\n' + c.dim('  · ') + c.amber(r.note || 'no client matching that name in your scope') + '\n')
+    printNotice()
+    return
+  }
+  console.log(`\n${c.cyan('❯')} ${c.bold(r.client)}${c.dim('  scope · ' + r.month)}`)
+  if (!r.data?.length) console.log(c.dim('  · no contract is live in that month'))
+  for (const entry of r.data || []) {
+    const h = entryHeading(entry)
+    console.log(`\n  ${c.bold(h.title)}${h.sub ? c.dim('  ' + h.sub) : ''}`)
+    table(deliverableRows(entry), 'scope')
+    const extras = extraRows(entry.extras)
+    if (extras.length) { console.log(c.dim('  extras')); table(extras, 'scope') }
+    for (const n of entry.notes || []) console.log('  ' + c.dim('▸ ') + c.amber(n))
+  }
+  const loose = extraRows(r.extras_unlinked)
+  if (loose.length) { console.log('\n' + c.dim('  extras with no matching contract')); table(loose, 'scope') }
+  for (const n of r.notes || []) console.log('  ' + c.dim('▸ ' + n))
+  console.log('  ' + c.dim('legend:  ' + LEGENDS.scope))
+  console.log(c.dim(`\n  ↳ brello help scope  ·  what each column means\n`))
+  printNotice('\n\n')
+}
+
 function table(rows, ctx) {
   if (!rows || !rows.length) { console.log(emptyLine(ctx)); return }
   if (typeof rows[0] !== 'object') { rows.forEach(r => console.log('  ' + c.cyan('›') + ' ' + r)); return }
@@ -364,6 +405,7 @@ const DETAIL = {
   'stage-stats': { sum: 'How each stage is used over the board’s history.', extra: 'No argument needed. --department "<name>" and --client "<name>" narrow it to matching cards; a family such as Design covers its departments.  e.g.  brello stage-stats --department "Video Edit"' },
   readiness:   { sum: 'Upcoming shoots and what is still missing before the day.', extra: 'Optional: --days N (default 7, up to 31). Lists every shoot in the next N days with what is not settled yet: plan, budget, models, props and call time. A 9:00 AM start counts as missing until someone confirms it. Add --json for the full detail, including each item\'s status and the plan and approval links.  e.g.  brello readiness --days 5' },
   studio:      { sum: 'The Bricks Studio review feed — what is out for review.', extra: 'Optional argument: filter by submission, card or client name. Shows status, version, comments and client-view receipt. Self-service keys stay with your team and omit share/open URLs, even with --board. e.g. brello studio reel' },
+  scope:       { sum: 'One client in one month: what the contract sold vs what was shot, delivered and approved.', extra: 'Argument: a client name (full or partial), then --month YYYY-MM (default: this month). One block per contract live in that month. CONTRACTED comes from the Salesforce quote, SHOT from completed shoot days, DELIVERED from cards sent to the client or completed, APPROVED from client approvals in Bricks Studio. ? means the number is unknown, and the notes under the table say why. Add --json for the raw response.  e.g.  brello scope "Sedra" --month 2026-10' },
   client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).  e.g.  brello client Foodhall' },
   due:         { sum: 'Cards coming due soon — or set one card’s due date.', extra: 'With a number (or nothing): your team’s cards due in the next N days (default 7).  With a card id/name + a date: sets that card’s due date; pass "clear" to remove it. Moving a missed due date later needs  --reason "<why>"  (REASON_REQUIRED).  e.g.  brello due 3   ·   brello due 1c11685c 2026-07-20 --reason "client moved the shoot"' },
   done:        { sum: 'Cards your team finished recently — or mark one done.', extra: 'With a number (or nothing): cards completed in the last N days (default 14).  With a card id/name: marks that card done; add --undo to reopen it.  e.g.  brello done 14   ·   brello done 1c11685c' },
@@ -402,6 +444,7 @@ const LEGENDS = {
   readiness:   'IN = days until the shoot · MISSING = plan, budget, models, props or call time not settled yet',
   studio:      'VERSION = latest Studio version · COMMENTS = review comments · CLIENT VIEWED = qualifying client share open',
   client:      'STAGE = board list · ASSIGNEE = owner · DUE = due date',
+  scope:       'CONTRACTED = sold on the quote · SHOT = completed shoot days · DELIVERED = sent or completed · APPROVED = client approved in Studio · ? = unknown',
   due:         'DUE = due date · IN = days until due',
   done:        'DONE = when it was completed',
   blocked:     'BLOCKED BY = what it’s waiting on',
@@ -466,7 +509,7 @@ function help() {
       ['changelog', '', "What's new — every release"],
     ] },
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'leaves', 'departments'] },
-    { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'clients', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
+    { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'clients', 'scope', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
     { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'meetings', 'readiness', 'studio'] },
     { title: 'Act on cards', rows: [
       ['create', '"<title>" [flags]', 'Create a new card (--assignee --due --client --dept --priority --list)'],
@@ -570,6 +613,9 @@ if (COMMANDS[cmd] || WRITES[cmd] || cmd === 'create' || cmd === 'new') {
 // create mints a NEW card (title + value flags), so it parses `rest` itself
 // rather than going through the card-ref write path.
 if (cmd === 'create' || cmd === 'new') { await runCreate(rest); process.exit(0) }
+
+// scope parses its own --month value and --json, so it skips the generic path.
+if (cmd === 'scope') { await runScope(rest); process.exit(0) }
 
 // write commands act on one card (comment/move/due/done/priority/assign/rename/
 // describe/archive). due & done double as read commands: a non-numeric first arg

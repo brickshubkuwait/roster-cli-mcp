@@ -17,6 +17,7 @@ What each command returns.
 | `activity` | Card history — who moved a card (stage→stage), commented, split, reassigned, or edited it, and when. |
 | `search "<text>"` | Cards whose title or client matches the text. |
 | `card <id>` | Full card detail — description, stage, priority, assignee, collaborators, subtasks, split task, linked cards, due. |
+| `scope "<client>" --month YYYY-MM` | One client in one month, one block per contract live in that month: contracted (Salesforce quote), shot (completed shoot days and their outputs), delivered (cards sent to the client or completed) and approved (client approvals in Bricks Studio), by type: sessions, photos, videos, reels, stories, artworks, animations. Special requests come with what was asked for, never an amount. Unknown numbers print `?` (`null` in `--json`) with a note. See [Scope](#scope). |
 | `stages` | The board's workflow stages (lists) with your team's open card count in each. |
 | `departments` | The roster's departments and their headcount. |
 | `cards ["<stage>"]` | Every card in a stage or matching the filters: id, title, client, assignee, stage, department, due, dwell. `--history` adds `history`: each stage the card passed through as `stage`, `entered_at`, `exited_at` (null while it is still there). |
@@ -120,6 +121,27 @@ split:          yes → Mahmoud Hesham
 description:    BTS edit, keep it real, music carries the brand…
 created:        Jun 05        last activity: Jun 18
 ```
+
+## Scope
+
+`brello scope "<client>" --month YYYY-MM` (MCP `roster_scope`). The month defaults to the current one. `--json` prints the gateway response as is.
+
+| Field | What it is |
+|---|---|
+| `opportunity_id` | The Salesforce opportunity on the contract |
+| `contract_type` | `retainer` or `project` (`sealed` is not a contract type in Roster, so it never appears) |
+| `period` | Retainer: the billing cycle that covers the month (a bi-monthly July invoice covers July and August), else the calendar month. Project: the whole project, start to end. |
+| `deliverables[]` | `{ type, contracted, shot, delivered, approved, delivered_cards, approved_cards }` |
+| `extras[]` | `{ special_request_id, what, status, value }` from the Special Requests board. `value` is the requested quantities, e.g. `{ "videos": 2 }`; a production budget has no value |
+| `notes[]` | Why any number is unknown, and what the period means for that contract |
+
+- **contracted** is the accepted (or newest) Salesforce quote. Sessions are the contract's sessions per month for a retainer, the shoot days on the quote for a project.
+- **shot** counts completed shoot days (not planning days) on that contract in the period, and the photos, videos and other outputs each day declared.
+- **delivered** counts cards on the opportunity that reached Sent to Client or Completed. Photos, artworks and stories use the card's unit count; one video or reel card is one piece.
+- **approved** counts those cards the client approved in Bricks Studio. Approvals given outside Studio are not recorded.
+- **null / `?`** means unknown, never zero: no line items synced, a shot day that declared no outputs, or a card with no unit count. The note gives what is known.
+
+A team key reads a client only when that client has cards on its team. People are never named in this response.
 
 ## Limits & pagination
 
