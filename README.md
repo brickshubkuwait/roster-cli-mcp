@@ -96,7 +96,7 @@ Card changes (`brello move`, `brello due <card> <date>`, `brello assign`) take `
 
 | Surface | Limit |
 |---|---|
-| Self-service key | 60 requests / minute + 3,000 / rolling day |
+| Self-service key | 60 requests / minute + 5,000 / rolling day |
 | Administrator-issued key | 180 requests / minute |
 
 CLI and MCP share the same budget per key. Self-service card access stays with your team, even with `--board`. Write actions need individual approval, assignments stay within your team, and archive is unavailable. Self-service responses omit share/open URLs, invoice details and delivery recipients.

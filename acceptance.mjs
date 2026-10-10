@@ -21,7 +21,7 @@ for (const t of ['roster_stages', 'roster_search', 'roster_workload', 'roster_ov
   ok(!!byName[t]?.inputSchema?.properties?.scope, `${t} declares scope in inputSchema`)
 
 const docs = await call('roster_docs')
-ok(docs.docs === 'https://roster.bricks.com.kw/developers' && docs.key_help.some(s => s.includes('3,000/rolling day')), 'roster_docs supplies the hub and self-service key guidance')
+ok(docs.docs === 'https://roster.bricks.com.kw/developers' && docs.key_help.some(s => s.includes('5,000/rolling day')), 'roster_docs supplies the hub and self-service key guidance')
 
 // 1) stages honors scope:"board" and labels itself board
 const stTeam = await call('roster_stages')

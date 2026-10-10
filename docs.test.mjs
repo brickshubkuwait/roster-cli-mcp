@@ -23,7 +23,7 @@ test('docs links work without credentials or a gateway connection', () => {
 })
 test('key help includes correct request, rotation, limits and local logout semantics', () => {
   const help = cli('help', 'keys')
-  for (const copy of ['brello help keys', '24 hours', '10 minutes', '60 requests/minute', '3,000/rolling day', '30 days', 'revokes the old key', 'logout only removes', 'Archive is unavailable']) assert.ok(help.includes(copy), copy)
+  for (const copy of ['brello help keys', '24 hours', '10 minutes', '60 requests/minute', '5,000/rolling day', '30 days', 'revokes the old key', 'logout only removes', 'Archive is unavailable']) assert.ok(help.includes(copy), copy)
   assert.doesNotMatch(help, /read-only|scoped|audited|privacy fence|[—–]/i)
 })
 test('MCP serves the same local guide and reports the published package version', async () => {

@@ -546,7 +546,7 @@ function help() {
     console.log('')
   }
   console.log(`${D}  docs: ${DOCS_URL}${R}`)
-  console.log(`${D}  self-service keys: your team, approved actions, 60/min + 3,000/day. Run brello help keys.${R}`)
+  console.log(`${D}  self-service keys: your team, approved actions, 60/min + 5,000/day. Run brello help keys.${R}`)
   console.log(`${D}  examples:  brello user Samer   ·   brello studio reel   ·   brello card 1c11685c${R}`)
   console.log(`${D}  scripts:   add --json to any command for raw JSON (no banner, no colour)${R}`)
   console.log(`${D}  new here?  run  ${R}${C}brello auth${R}${D}  first, then  ${R}${C}brello stats${R}\n`)

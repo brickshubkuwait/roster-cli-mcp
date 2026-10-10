@@ -147,7 +147,7 @@ A team key reads a client only when that client has cards on its team. People ar
 
 | | |
 |---|---|
-| Self-service requests | 60 / minute + 3,000 / rolling day per key |
+| Self-service requests | 60 / minute + 5,000 / rolling day per key |
 | Administrator-issued requests | 180 / minute per key |
 | `search` | up to 50 cards |
 | `comments`, `reactions` | latest 40 |
