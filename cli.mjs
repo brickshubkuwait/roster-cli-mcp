@@ -2,7 +2,8 @@
 // Brello CLI — query your team's work.
 //   brello auth   (one time, or  pbpaste | brello login)   then:
 //   brello stats | team | overdue | workload | active | leaves
-//   brello comments | reactions | search "<text>" | card <id> | shoots | help
+//   brello comments | reactions | search "<text>" | card <id> | shoots | meetings | help
+//   Add --json to any command for machine output (raw JSON, no banner, no colour).
 import { callRoster, QUERIES, clearToken, getToken, ensureRosterDir, describeError, isLegacyKey, CONNECT_URL } from './lib/client.mjs'
 import { printNotice, printLegacyHint } from './lib/auth.mjs'
 import { CHANGELOG, VERSION } from './lib/changelog.mjs'
@@ -11,10 +12,20 @@ import { homedir } from 'node:os'
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const [, , cmd, ...rest] = process.argv
+// --json anywhere on the line: machine output. The raw JSON response goes to
+// stdout, with no banner, spinner, colour or notice line (the notice stays in
+// the JSON). Errors print as {"ok":false,"error":...} with exit code 1.
+const ARGV = process.argv.slice(2)
+const JSON_OUT = ARGV.includes('--json')
+const [cmd, ...rest] = ARGV.filter(a => a !== '--json')
+const emit = (o) => process.stdout.write(JSON.stringify(o, null, 2) + '\n')
+function emitError(e, extra = {}) {
+  emit({ ok: false, error: describeError(e, extra), code: e?.code || null, status: e?.status || null })
+  process.exit(1)
+}
 
 // ── terminal style kit: ANSI palette + box-drawing (no-ops when piped) ──
-const TTY = process.stdout.isTTY
+const TTY = process.stdout.isTTY && !JSON_OUT
 const wrap = (code) => (s) => TTY ? `\x1b[${code}m${s}\x1b[0m` : String(s)
 const c = {
   bold: wrap(1), dim: wrap(2), cyan: wrap(36), green: wrap(32),
@@ -24,7 +35,7 @@ const stripAnsi = (s) => String(s).replace(/\x1b\[[0-9;]*m/g, '')
 
 // ── braille fetch shimmer: spins on stderr while we wait on the gateway, so
 // piped/redirected stdout stays clean. No-op unless stderr is a real TTY. ──
-const SPIN = process.stderr.isTTY
+const SPIN = process.stderr.isTTY && !JSON_OUT
 const BRAILLE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 function startSpinner(label = 'querying roster') {
   if (!SPIN) return () => {}
@@ -77,19 +88,22 @@ if (TTY && !existsSync(MARK)) {
 
 // ── auth: interactive, prompts for the token + a little terminal theatre ──
 if (cmd === 'docs') {
+  if (JSON_OUT) { emit({ ok: true, docs: DOCS_URL, keys: KEYS_URL, key_help: KEY_GUIDE }); process.exit(0) }
   console.log(`Developer hub: ${DOCS_URL}\nMy keys: ${KEYS_URL}\nKey help: brello help keys`)
   process.exit(0)
 }
 if (cmd === 'auth') { const { runAuth } = await import('./lib/auth.mjs'); await runAuth(); process.exit(0) }
 
-if (cmd === 'logout') { clearToken(); console.log(c.green('✓') + ' key removed'); process.exit(0) }
+if (cmd === 'logout') { clearToken(); JSON_OUT ? emit({ ok: true, key_removed: true }) : console.log(c.green('✓') + ' key removed'); process.exit(0) }
 if (cmd === 'whoami') {
   const t = getToken()
+  if (JSON_OUT) { emit({ ok: true, key_set: !!t, legacy_key: !!t && isLegacyKey(t) }); process.exit(0) }
   console.log(t ? c.green('✓') + ' a key is set' : c.red('✗') + ' no key  ' + c.dim('· run:  ') + c.cyan('brello auth'))
   if (t) printLegacyHint(t)
   process.exit(0)
 }
 if (cmd === 'changelog' || cmd === 'whatsnew') {
+  if (JSON_OUT) { emit({ ok: true, installed: VERSION, releases: CHANGELOG }); process.exit(0) }
   console.log('\n' + c.bold('brello changelog') + c.dim('  ·  current  ') + c.cyan('v' + VERSION) + '\n')
   for (const r of CHANGELOG) {
     console.log(c.bold(c.cyan('v' + r.version)) + c.dim('  ·  ' + r.date + '  ·  ') + c.bold(r.title))
@@ -122,9 +136,10 @@ const COMMANDS = {
   now:         { q: 'now' },
   stages:      { q: 'stages' },
   cards:       { q: 'cards', arg: '["<stage>"] [flags]' },
-  'stage-stats': { q: 'stage_stats' },
+  'stage-stats': { q: 'stage_stats', arg: '[--department "<name>"] [--client "<name>"]' },
   departments: { q: 'departments' },
-  shoots:      { q: 'shoots' },
+  shoots:      { q: 'shoots', arg: '[--from YYYY-MM-DD --to YYYY-MM-DD] [flags]' },
+  meetings:    { q: 'meetings', arg: '[--from YYYY-MM-DD --to YYYY-MM-DD] [flags]' },
   studio:      { q: 'studio', arg: '[filter]' },
   'ps-issues': { q: 'ps_issues', admin: true },
   audit:       { q: 'audit', admin: true },
@@ -194,10 +209,12 @@ async function runWrite(name, args, flags, reason = null) {
   }
   try {
     const r = await withSpinner(`${name} · ${card}`, () => callRoster(WRITES[name].q, params))
+    if (JSON_OUT) { emit(r); return }
     const detail = r.detail || (r.comment_id ? 'comment added' : 'done')
     console.log('  ' + c.green('✓') + ' ' + detail)
     printNotice()
   } catch (e) {
+    if (JSON_OUT) emitError(e, { hints: CLI_HINTS })
     console.error('  ' + c.red('✗') + ' ' + describeError(e, { hints: CLI_HINTS }))
     process.exit(1)
   }
@@ -234,6 +251,7 @@ async function runCreate(rest) {
   if (desc) params.description = desc
   try {
     const r = await withSpinner(`create · ${name}`, () => callRoster('create', params))
+    if (JSON_OUT) { emit(r); return }
     const bits = [
       r.list && `in ${r.list}`, r.assignee && `→ ${r.assignee}`,
       r.due && `due ${r.due}`, r.priority && `${r.priority} priority`,
@@ -241,6 +259,7 @@ async function runCreate(rest) {
     console.log('  ' + c.green('✓') + ' created ' + c.bold(r.card) + (bits ? '  ' + c.dim(bits) : '') + (r.id ? c.dim('  ·  ' + String(r.id).slice(0, 8)) : ''))
     printNotice()
   } catch (e) {
+    if (JSON_OUT) emitError(e)
     console.error('  ' + c.red('✗') + ' ' + describeError(e))
     process.exit(1)
   }
@@ -305,7 +324,10 @@ const DETAIL = {
   card:        { sum: 'Everything about a single card.', extra: 'Argument: a card id (the first 8 characters are enough). Shows workflow, tracked effort, Studio submissions, review context, Slack thread, deliverable sizes and approved EN/AR copy. Self-service keys omit share/open URLs, invoices and delivery recipients. e.g. brello card 1c11685c' },
   stages:      { sum: 'The board’s workflow stages and how full each one is.', extra: 'No argument. CARDS = your team’s open cards in that stage; OVERDUE = how many of those are late.' },
   departments: { sum: 'The roster’s departments and their headcount.', extra: 'No argument. ACTIVE NOW = how many people in each department are tracking time.' },
-  shoots:      { sum: 'The shoot schedule — recent and upcoming (company-wide).', extra: 'No argument. The company-wide schedule shows when a shoot is and who is on the crew.' },
+  shoots:      { sum: 'The shoot schedule, recent and upcoming (company-wide).', extra: 'With no flags: the last 7 days onward. --from YYYY-MM-DD --to YYYY-MM-DD (both together) sets a range. Filters: --client "<name>" (partial), --type "<shoot type>", --status <Confirmed|Pending|Canceled...>. --include-removed adds removed shoots with when and why. --json returns every field: id, client_id, account, contract_month, extended, created_at, updated_at, removed_at, removed_reason.  e.g.  brello shoots --from 2026-10-01 --to 2026-10-31 --client Foodhall' },
+  meetings:    { sum: 'Meetings with owner, attendees and minutes status.', extra: 'With no flags: 7 days back to 60 days ahead. --from YYYY-MM-DD --to YYYY-MM-DD, --client "<name>", --owner "<name>". Shows meetings your team organises or attends; --board shows the whole board. MINUTES is none, draft or submitted. The notes link opens the calendar event, where Gemini notes attach; the Roster does not store Gemini notes.  e.g.  brello meetings --from 2026-10-01 --to 2026-10-31 --owner Melani' },
+  cards:       { sum: 'Every card in a stage, or matching your filters.', extra: 'Optional argument: a stage name. --board for the whole board, --unassigned for cards with no assignee, --client "<name>" to narrow by client, --history to add each card’s stage history (stage, entered and exited).  e.g.  brello cards "Ready for Sprint" --board --history' },
+  'stage-stats': { sum: 'How each stage is used over the board’s history.', extra: 'No argument needed. --department "<name>" and --client "<name>" narrow it to matching cards; a family such as Design covers its departments.  e.g.  brello stage-stats --department "Video Edit"' },
   studio:      { sum: 'The Bricks Studio review feed — what is out for review.', extra: 'Optional argument: filter by submission, card or client name. Shows status, version, comments and client-view receipt. Self-service keys stay with your team and omit share/open URLs, even with --board. e.g. brello studio reel' },
   client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).  e.g.  brello client Foodhall' },
   due:         { sum: 'Cards coming due soon — or set one card’s due date.', extra: 'With a number (or nothing): your team’s cards due in the next N days (default 7).  With a card id/name + a date: sets that card’s due date; pass "clear" to remove it. Moving a missed due date later needs  --reason "<why>"  (REASON_REQUIRED).  e.g.  brello due 3   ·   brello due 1c11685c 2026-07-20 --reason "client moved the shoot"' },
@@ -338,7 +360,9 @@ const LEGENDS = {
   user:        'STATUS = live / done / archived · STARTED→ENDED→DONE = work timeline',
   stages:      'CARDS = open cards here · OVERDUE = how many are late',
   departments: 'PEOPLE = headcount · ACTIVE NOW = tracking time',
-  shoots:      'TIME = start time · CREW = who’s on it (first few)',
+  shoots:      'TIME = start time · CREW = who’s on it · ACCOUNT = account owner · MONTH = contract month',
+  meetings:    'START = Kuwait time · OWNER = organiser · MINUTES = none / draft / submitted',
+  cards:       'STAGE = board list · HISTORY = stages it passed through, oldest first',
   studio:      'VERSION = latest Studio version · COMMENTS = review comments · CLIENT VIEWED = qualifying client share open',
   client:      'STAGE = board list · ASSIGNEE = owner · DUE = due date',
   due:         'DUE = due date · IN = days until due',
@@ -364,6 +388,7 @@ const EMPTY_HINTS = {
   client:   'no cards for that client in your scope',
   studio:   'nothing in the Studio review feed',
   shoots:   'no shoots scheduled in that range',
+  meetings: 'no meetings in that range',
 }
 const aliasName = (name) => name === 'ps_issues' ? 'ps-issues' : name
 function emptyLine(ctx) {
@@ -378,6 +403,7 @@ function helpFor(name) {
   const d = DETAIL[key]
   if (!def && !d) { console.error(`I don't have a help page for "${name}".`); help(); return }
   const usage = 'brello ' + (key === 'keys' ? 'help keys' : key) + (def?.arg ? ' ' + def.arg : '')
+  if (JSON_OUT) { emit({ ok: true, command: key, usage, admin: !!def?.admin, summary: d?.sum || null, detail: d?.extra || null, columns: LEGENDS[key] || null }); return }
   console.log(`\n${c.cyan('❯')} ${c.bold(usage)}${def?.admin ? '  ' + c.amber('· admin only') : ''}`)
   if (d?.sum) console.log('  ' + d.sum)
   if (d?.extra) console.log('\n  ' + c.dim(d.extra))
@@ -402,7 +428,7 @@ function help() {
     ] },
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'leaves', 'departments'] },
     { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
-    { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'studio'] },
+    { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'meetings', 'studio'] },
     { title: 'Act on cards', rows: [
       ['create', '"<title>" [flags]', 'Create a new card (--assignee --due --client --dept --priority --list)'],
       ['comment', '<card> <text>', 'Add a comment to a card'],
@@ -421,6 +447,10 @@ function help() {
     title: s.title,
     items: s.rows || s.cmds.map(k => [k, COMMANDS[k]?.arg || '', QUERIES[COMMANDS[k]?.q]?.desc || '']),
   }))
+  if (JSON_OUT) {
+    emit({ ok: true, version: VERSION, docs: DOCS_URL, groups: groups.map(g => ({ title: g.title, commands: g.items.map(([command, arg, desc]) => ({ command, arg: arg || null, desc })) })) })
+    return
+  }
   const w = Math.max(...groups.flatMap(g => g.items.map(([n, a]) => (n + (a ? ' ' + a : '')).length)))
   console.log(`\n${B}brello${R} ${D}— your team's work, from the terminal${R}\n`)
   for (const g of groups) {
@@ -433,6 +463,7 @@ function help() {
   console.log(`${D}  docs: ${DOCS_URL}${R}`)
   console.log(`${D}  self-service keys: your team, approved actions, 60/min + 3,000/day. Run brello help keys.${R}`)
   console.log(`${D}  examples:  brello user Samer   ·   brello studio reel   ·   brello card 1c11685c${R}`)
+  console.log(`${D}  scripts:   add --json to any command for raw JSON (no banner, no colour)${R}`)
   console.log(`${D}  new here?  run  ${R}${C}brello auth${R}${D}  first, then  ${R}${C}brello stats${R}\n`)
 }
 
@@ -460,6 +491,28 @@ for (let i = 0; i < rest.length; i++) {
   if (rest[i] === '--reason') { reason = rest[i + 1] ?? ''; rest.splice(i, 2); break }
   if (rest[i].startsWith('--reason=')) { reason = rest[i].slice('--reason='.length); rest.splice(i, 1); break }
 }
+// Value flags for the filtered reads (--from 2026-10-01 or --from=2026-10-01).
+// Taken out of `rest` first so their values never read as positional args.
+const VALUE_FLAGS = {
+  shoots: ['from', 'to', 'client', 'type', 'status'],
+  meetings: ['from', 'to', 'client', 'owner'],
+  'stage-stats': ['department', 'dept', 'client'],
+  cards: ['client'],
+}
+const opts = {}
+for (const name of VALUE_FLAGS[cmd] || []) {
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i]
+    if (a === '--' + name) {
+      const v = rest[i + 1]
+      const has = v !== undefined && !v.startsWith('--')
+      opts[name] = has ? v : ''
+      rest.splice(i, has ? 2 : 1)
+      break
+    }
+    if (a.startsWith('--' + name + '=')) { opts[name] = a.slice(name.length + 3); rest.splice(i, 1); break }
+  }
+}
 const flags = new Set(rest.filter(a => a.startsWith('--')))
 const args = rest.filter(a => !a.startsWith('--'))
 
@@ -486,6 +539,21 @@ if (flags.has('--board')) params.scope = 'board'
 if (def.q === 'cards') {
   if (args.length) params.stage = args.join(' ').trim()
   if (flags.has('--unassigned')) params.assignee = 'none'
+  if (flags.has('--history')) params.history = true
+  if (opts.client) params.client = opts.client
+}
+if (def.q === 'shoots' || def.q === 'meetings') {
+  for (const k of ['from', 'to', 'client', 'type', 'status', 'owner']) if (opts[k]) params[k] = opts[k].trim()
+  if ((params.from && !params.to) || (params.to && !params.from)) {
+    console.error(`Give both dates, e.g.   brello ${cmd} --from 2026-10-01 --to 2026-10-31`)
+    process.exit(1)
+  }
+  if (def.q === 'shoots' && flags.has('--include-removed')) params.include_removed = true
+}
+if (def.q === 'stage_stats') {
+  const d = opts.department || opts.dept
+  if (d) params.department = d.trim()
+  if (opts.client) params.client = opts.client.trim()
 }
 if (def.q === 'search') {
   params.q = args.join(' ').trim()
@@ -511,8 +579,35 @@ if (def.q === 'due')    { const n = parseInt(args[0], 10); if (Number.isFinite(n
 if (def.q === 'done')   { const n = parseInt(args[0], 10); if (Number.isFinite(n)) params.days = n; }
 if (def.q === 'recent') { const n = parseInt(args[0], 10); if (Number.isFinite(n)) params.n = n; }
 
+// Human view only: nested fields read as one line, and the widest rows keep
+// their key columns. --json always returns every field untouched.
+const when16 = (v) => (v ? String(v).slice(0, 16).replace('T', ' ') : '')
+function humanRows(name, rows) {
+  if (!Array.isArray(rows) || !rows.length || typeof rows[0] !== 'object') return rows
+  if (name === 'shoots') {
+    const removed = rows.some(s => s.removed_at)
+    return rows.map(s => ({
+      date: s.date, time: s.time, client: s.client, type: s.type, status: s.status, location: s.location,
+      crew: s.crew, account: s.account, month: s.contract_month, extended: s.extended ? 'yes' : '',
+      ...(removed ? { removed: s.removed_at ? String(s.removed_at).slice(0, 10) : '', why: s.removed_reason || '' } : {}),
+    }))
+  }
+  if (name === 'meetings') {
+    return rows.map(m => ({
+      start: when16(m.start), client: m.client, title: m.title, owner: m.owner,
+      attendees: (m.attendees || []).map(a => a.name).join(', '), online: m.online ? 'yes' : '',
+      minutes: m.minutes_status, by: m.minutes_by,
+    }))
+  }
+  if (name === 'cards' && rows.some(r => Array.isArray(r.history))) {
+    return rows.map(({ history, stage_entered_at, dwell_basis, ...r }) => ({ ...r, history: (history || []).map(h => h.stage).join(' > ') }))
+  }
+  return rows
+}
+
 try {
   const r = await withSpinner(`querying · ${cmd}`, () => callRoster(def.q, params))
+  if (JSON_OUT) { emit(r); process.exit(0) }
   if (r.person) {
     const p = r.person, t = r.totals || {}
     const sub = [p.role ? p.role.replace(/_/g, ' ') : '', p.department].filter(Boolean).join(' · ')
@@ -533,7 +628,7 @@ try {
     console.log('  ' + c.dim('─'.repeat(vlen(head))) + '\n')
   }
   if (Array.isArray(r.data)) {
-    table(r.data, cmd)
+    table(humanRows(cmd, r.data), cmd)
     const leg = legendFor(cmd)
     if (leg && r.data.length && typeof r.data[0] === 'object' && Object.keys(r.data[0]).length >= 4) {
       console.log('  ' + c.dim('legend:  ') + c.dim(leg))
@@ -543,6 +638,7 @@ try {
   console.log(c.dim(`\n  ↳ brello help  ·  for everything you can ask\n`))
   printNotice('\n\n')
 } catch (e) {
+  if (JSON_OUT) emitError(e)
   console.error('✖ ' + describeError(e))
   process.exit(1)
 }

@@ -70,9 +70,19 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 | `brello now` | Live pulse — who's tracking now, what's due today, and the latest card moves |
 | `brello stages` | Board stages with your team's open card count in each |
 | `brello departments` | The roster's departments and headcount |
-| `brello shoots` | The whole shoot schedule — recent + upcoming, company-wide |
+| `brello cards ["<stage>"]` | Every card in a stage or matching filters; `--history` adds each card's stage history |
+| `brello stage-stats` | Stage usage over the board's history; `--department` and `--client` narrow it |
+| `brello shoots` | The company-wide shoot schedule; `--from`/`--to`, `--client`, `--type`, `--status`, `--include-removed` |
+| `brello meetings` | Meetings with owner, attendees and minutes status; `--from`/`--to`, `--client`, `--owner` |
 
 Run `brello help` to see them all. Full reference: [QUERIES.md](./QUERIES.md).
+
+Add `--json` to any command for scripts: the raw JSON response, with no banner and no colour.
+
+```bash
+brello shoots --from 2026-10-01 --to 2026-10-31 --client Foodhall --json
+brello meetings --owner Melani --json
+```
 
 Card changes (`brello move`, `brello due <card> <date>`, `brello assign`) take `--reason "<why>"`, which is recorded on the card. Taking a card out of Backlog needs a due date first (`DUE_REQUIRED`), and moving a missed due date to a later day needs a reason (`REASON_REQUIRED`).
 

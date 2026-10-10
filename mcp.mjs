@@ -53,15 +53,33 @@ server.tool('roster_cards', 'List EVERY card matching the filters — the stage/
   client: z.string().optional().describe('client name (partial OK)'),
   done: z.boolean().optional().describe('true = completed only, false = open only, omit = both'),
   scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards"),
-}, wrap('cards', a => ({ ...(a.stage ? { stage: a.stage } : {}), ...(a.assignee ? { assignee: a.assignee } : {}), ...(a.client ? { client: a.client } : {}), ...(typeof a.done === 'boolean' ? { done: a.done } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
+  history: z.boolean().optional().describe('true adds history: [{stage, entered_at, exited_at}] per card, oldest first (exited_at null = still there)'),
+}, wrap('cards', a => ({ ...(a.stage ? { stage: a.stage } : {}), ...(a.assignee ? { assignee: a.assignee } : {}), ...(a.client ? { client: a.client } : {}), ...(typeof a.done === 'boolean' ? { done: a.done } : {}), ...(a.scope ? { scope: a.scope } : {}), ...(a.history ? { history: true } : {}) })))
 server.tool('roster_stage_cards', 'Every card currently in ONE stage (list) — e.g. roster_stage_cards("Ready for Sprint", scope "board"). Same engine as roster_cards.', {
   stage: z.string().describe('the stage/list name, e.g. "Ready for Sprint"'),
   assignee: z.string().optional().describe('person name, or "none" for unassigned only'),
   scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards"),
 }, wrap('cards', a => ({ stage: a.stage, ...(a.assignee ? { assignee: a.assignee } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
-server.tool('roster_stage_stats', 'Stage usage over the board\'s WHOLE history (since 2026-06-06, all teams): per stage — distinct cards ever entered, median + p90 dwell hours (completed segments), and skip-rate (share of forward moves that jumped past the stage). Aggregates only, no names. Use to judge whether a column is actually used and what "normal" dwell looks like.', {}, wrap('stage_stats'))
+server.tool('roster_stage_stats', 'Stage usage over the board\'s WHOLE history (since 2026-06-06, all teams): per stage, distinct cards ever entered, median + p90 dwell hours (completed segments), and skip rate (share of forward moves that jumped past the stage). Aggregates only, no names. Optional department and client narrow it to matching cards. Use to judge whether a column is actually used and what "normal" dwell looks like.', {
+  department: z.string().optional().describe('department, e.g. "Video Edit"; a family name such as "Design" covers its departments'),
+  client: z.string().optional().describe('client name (partial OK)'),
+}, wrap('stage_stats', a => ({ ...(a.department ? { department: a.department } : {}), ...(a.client ? { client: a.client } : {}) })))
 server.tool('roster_departments', 'The roster’s departments and headcount', {}, wrap('departments'))
-server.tool('roster_shoots', 'The whole shoot schedule — recent + upcoming, company-wide (date, client, type, crew)', {}, wrap('shoots'))
+server.tool('roster_shoots', 'The company-wide shoot schedule. Without dates: the last 7 days onward (first 120). With from + to (YYYY-MM-DD, both required): that range (up to 1000 rows). Each shoot: id, date, time, client, client_id, type, status, location, crew, account (the account owner, not in crew), contract_month, extended (Extended Session), created_at, updated_at, removed_at, removed_reason. Removed shoots are left out unless include_removed is true.', {
+  from: z.string().optional().describe('start date YYYY-MM-DD (needs to)'),
+  to: z.string().optional().describe('end date YYYY-MM-DD, inclusive (needs from)'),
+  client: z.string().optional().describe('client name, case-insensitive partial'),
+  type: z.string().optional().describe('shoot type, case-insensitive exact'),
+  status: z.string().optional().describe('status, e.g. Confirmed, Pending, Canceled'),
+  include_removed: z.boolean().optional().describe('true also returns removed shoots, with removed_at and removed_reason'),
+}, wrap('shoots', a => ({ ...(a.from ? { from: a.from } : {}), ...(a.to ? { to: a.to } : {}), ...(a.client ? { client: a.client } : {}), ...(a.type ? { type: a.type } : {}), ...(a.status ? { status: a.status } : {}), ...(a.include_removed ? { include_removed: true } : {}) })))
+server.tool('roster_meetings', 'Meetings from the Roster calendar. Without dates: 7 days back to 60 days ahead (Kuwait days). Each meeting: id, client, title, kind, status, start, end (Kuwait time, ISO), owner (organiser), attendees [{name, email, internal, response}], online, location_mode, minutes_status (none = no minutes, draft = written but not submitted, submitted = pushed to the calendar event), minutes_submitted_at, minutes_by, gemini_notes_url (the calendar event link, where Gemini notes attach; the Roster does not store Gemini notes). Default scope "team" = meetings your team organises or attends; scope "board" = every meeting.', {
+  from: z.string().optional().describe('start date YYYY-MM-DD (needs to)'),
+  to: z.string().optional().describe('end date YYYY-MM-DD, inclusive (needs from)'),
+  client: z.string().optional().describe('client name (partial OK)'),
+  owner: z.string().optional().describe('organiser name (partial OK)'),
+  scope: z.enum(['team', 'board']).optional().describe("'team' (default) = meetings your team organises or attends; 'board' = every meeting"),
+}, wrap('meetings', a => ({ ...(a.from ? { from: a.from } : {}), ...(a.to ? { to: a.to } : {}), ...(a.client ? { client: a.client } : {}), ...(a.owner ? { owner: a.owner } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
 server.tool('roster_studio', 'Bricks Studio review feed — linked submissions with card/client, status, version, comments, client-view receipt, and open/share links. Optional text filter and team/board scope.', {
   q: z.string().optional().describe('optional filter by submission, card, or client name'),
   scope: z.enum(['team', 'board']).optional().describe("'team' (default) = your team’s cards; 'board' = the whole board"),

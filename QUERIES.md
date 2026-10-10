@@ -19,9 +19,49 @@ What each command returns.
 | `card <id>` | Full card detail — description, stage, priority, assignee, collaborators, subtasks, split task, linked cards, due. |
 | `stages` | The board's workflow stages (lists) with your team's open card count in each. |
 | `departments` | The roster's departments and their headcount. |
-| `shoots` | The whole shoot schedule, company-wide — date, client, type, crew (recent + upcoming). |
+| `cards ["<stage>"]` | Every card in a stage or matching the filters: id, title, client, assignee, stage, department, due, dwell. `--history` adds `history`: each stage the card passed through as `stage`, `entered_at`, `exited_at` (null while it is still there). |
+| `stage-stats` | Per stage over the board's history: cards entered, median and p90 dwell hours, skip rate. `--department "<name>"` and `--client "<name>"` narrow it to matching cards. |
+| `shoots` | The whole shoot schedule, company-wide. Without dates: the last 7 days onward. See [Shoots](#shoots). |
+| `meetings` | Meetings with owner, attendees and minutes status. See [Meetings](#meetings). |
 
 CLI and MCP share the same per-key budget. Self-service keys see your team’s cards even when `--board` is supplied. Write actions need approval, assignments stay within your team, and archive is unavailable. Self-service responses omit share/open URLs, invoice details and delivery recipients.
+
+Add `--json` to any command for machine output: the raw JSON response on stdout, with no banner and no colour. Errors print as `{"ok": false, "error": "...", "code": ..., "status": ...}` with exit code 1.
+
+## Shoots
+
+`brello shoots [--from YYYY-MM-DD --to YYYY-MM-DD] [--client "<name>"] [--type "<type>"] [--status <status>] [--include-removed]`
+
+`--from` and `--to` go together and are inclusive (up to 400 days, first 1000 shoots). `--client` matches part of the name; `--type` and `--status` match the whole value, any case. Removed shoots are left out unless you pass `--include-removed`. Claude uses `roster_shoots` with the same names (`include_removed: true`).
+
+| Field | What it is |
+|---|---|
+| `id` · `client_id` | The shoot and its client |
+| `date` · `time` | Shoot day and start time |
+| `client` · `type` · `status` · `location` | As on the roster |
+| `crew` | Creatives, photographers, videographers and reels crew |
+| `account` | The account owner, listed apart from the crew |
+| `contract_month` | The contract month the shoot counts toward |
+| `extended` | true for an Extended Session |
+| `created_at` · `updated_at` | When the shoot was booked and last changed |
+| `removed_at` · `removed_reason` | When it was removed and the reason given (reasons are recorded from 10 Oct 2026) |
+
+## Meetings
+
+`brello meetings [--from YYYY-MM-DD --to YYYY-MM-DD] [--client "<name>"] [--owner "<name>"] [--board]`
+
+Without dates: 7 days back to 60 days ahead. Shows meetings your team organises or attends; `--board` shows every meeting for administrator-issued keys. Claude uses `roster_meetings`.
+
+| Field | What it is |
+|---|---|
+| `id` · `client` · `client_id` · `title` · `kind` · `status` | The meeting |
+| `start` · `end` | Kuwait time, ISO format |
+| `owner` | The organiser |
+| `attendees` | `name`, `email`, `internal` (a Bricks person) and `response` |
+| `online` · `location_mode` | Online, at Bricks, elsewhere or by phone |
+| `minutes_status` | `none` (no minutes), `draft` (written, not submitted) or `submitted` |
+| `minutes_submitted_at` · `minutes_by` | When the minutes were submitted and who wrote them |
+| `gemini_notes_url` | The calendar event link, where Gemini notes attach. The Roster does not store Gemini notes. |
 
 ## Card fields
 
