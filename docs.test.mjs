@@ -182,3 +182,69 @@ test('new copy has no em or en dashes', () => {
     assert.doesNotMatch(line, /[–—]/, tool)
   }
 })
+
+test('clients: name filter and --all reach the server; the table shows handle, open cards and logo yes/no', async () => {
+  const rows = [
+    { id: 'c1', name: 'Foodhall', logo_url: 'https://cdn.test/fh.jpg', instagram_handle: 'foodhall', industry: 'fnb', is_active: true, accounts: ['Melani Martis'], open_cards: 4 },
+    { id: 'c2', name: 'Fashion House', logo_url: null, instagram_handle: null, industry: null, is_active: true, accounts: [], open_cards: 0 },
+  ]
+  await withGateway(() => [200, { ok: true, count: 2, data: rows }], async (url, seen) => {
+    const t = await run(url, 'clients', 'foo', 'hall', '--all')
+    assert.equal(t.code, 0, t.stderr)
+    assert.deepEqual(seen[0].params, { q: 'foo hall', active: false })
+    assert.match(t.stdout, /HANDLE/)
+    assert.match(t.stdout, /@foodhall/)
+    assert.match(t.stdout, /OPEN CARDS/)
+    assert.match(t.stdout, /yes/)
+    assert.doesNotMatch(t.stdout, /cdn\.test/, 'the table leaves URLs to --json')
+    const j = await run(url, 'clients', '--json')
+    assert.deepEqual(JSON.parse(j.stdout).data, rows)
+    assert.deepEqual(seen[1].params, {})
+    const client = new Client({ name: 'clients-test', version: '1.0.0' })
+    const transport = new StdioClientTransport({ command: process.execPath, args: [new URL('./mcp.mjs', import.meta.url).pathname], env: { ...process.env, ROSTER_URL: url, BRELLO_TOKEN: 'brl_test_key' } })
+    try {
+      await client.connect(transport)
+      await client.callTool({ name: 'roster_clients', arguments: { q: 'food', active: false, scope: 'board' } })
+      assert.deepEqual(seen[2].params, { q: 'food', active: false, scope: 'board' })
+    } finally { await client.close() }
+  })
+})
+
+// ── new-version notice ──
+import { isNewer, refreshLatest, versionNotice, updateLine, REGISTRY_URL, DAY_MS } from './lib/update-check.mjs'
+
+test('version notice: compares releases, reads the day cache, refreshes with a stubbed fetch', async () => {
+  assert.equal(isNewer('1.12.0', '1.11.0'), true)
+  assert.equal(isNewer('1.11.0', '1.11.0'), false)
+  assert.equal(isNewer('1.10.9', '1.11.0'), false)
+  assert.equal(isNewer('2.0.0', '1.99.99'), true)
+  assert.equal(isNewer('garbage', '1.0.0'), false)
+  const file = join(mkdtempSync(join(tmpdir(), 'brello-vc-')), '.version-check')
+  const now = Date.UTC(2026, 9, 10)
+  assert.deepEqual(versionNotice({ current: '1.11.0', file, now }), { line: null, stale: true }, 'no cache: nothing to print, a refresh is due')
+  const calls = []
+  const fetchOk = async (url, init) => { calls.push([url, !!init.signal]); return { ok: true, json: async () => ({ version: '1.12.0' }) } }
+  assert.equal(await refreshLatest({ fetchImpl: fetchOk, file, now }), '1.12.0')
+  assert.deepEqual(calls, [[REGISTRY_URL, true]])
+  assert.deepEqual(versionNotice({ current: '1.11.0', file, now: now + 1000 }), { line: updateLine('1.12.0'), stale: false })
+  assert.equal(updateLine('1.12.0'), 'brello 1.12.0 is out, update with: npm i -g brello')
+  assert.equal(versionNotice({ current: '1.12.0', file, now }).line, null, 'up to date: silent')
+  assert.equal(versionNotice({ current: '1.11.0', file, now: now + DAY_MS }).stale, true, 'checked at most once a day')
+  // errors and timeouts are silent and still recorded, so tomorrow retries
+  assert.equal(await refreshLatest({ fetchImpl: async () => { throw new Error('offline') }, file, now }), null)
+  assert.deepEqual(versionNotice({ current: '1.11.0', file, now }), { line: null, stale: false })
+  const hang = (url, init) => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))))
+  const t0 = Date.now()
+  assert.equal(await refreshLatest({ fetchImpl: hang, file, now, timeoutMs: 50 }), null)
+  assert.ok(Date.now() - t0 < 1000, 'the timeout aborts the request')
+  assert.equal(await refreshLatest({ fetchImpl: async () => ({ ok: false, json: async () => ({}) }), file: '/dev/null/nope/.version-check', now }), null, 'an unwritable cache is silent')
+})
+
+test('version notice: real terminals only, never with --json, never in the MCP server', () => {
+  const cliSrc = readFileSync(new URL('./cli.mjs', import.meta.url), 'utf8')
+  assert.match(cliSrc, /const TTY = process\.stdout\.isTTY && !JSON_OUT/)
+  assert.match(cliSrc, /if \(TTY && !process\.env\.BRELLO_NO_UPDATE_CHECK\) \{\s*try \{\s*const \{ versionNotice, refreshInBackground \} = await import\('\.\/lib\/update-check\.mjs'\)/)
+  assert.ok(cliSrc.indexOf("import('./lib/banner.mjs')") < cliSrc.indexOf("import('./lib/update-check.mjs')"), 'printed after the banner')
+  assert.doesNotMatch(readFileSync(new URL('./mcp.mjs', import.meta.url), 'utf8'), /update-check/)
+  assert.doesNotMatch(readFileSync(new URL('./lib/client.mjs', import.meta.url), 'utf8'), /update-check/)
+})

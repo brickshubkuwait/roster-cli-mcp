@@ -86,6 +86,18 @@ if (TTY && !existsSync(MARK)) {
   }
 }
 
+// ── new-version notice: real terminal only (TTY is already false under --json),
+// at most one registry check a day, done by a detached child so no command ever
+// waits on it or fails because of it. The MCP server never loads this. ──
+if (TTY && !process.env.BRELLO_NO_UPDATE_CHECK) {
+  try {
+    const { versionNotice, refreshInBackground } = await import('./lib/update-check.mjs')
+    const { line, stale } = versionNotice({ current: VERSION })
+    if (line) process.stderr.write(c.dim('  ' + line) + '\n')
+    if (stale) refreshInBackground()
+  } catch { /* silent */ }
+}
+
 // ── auth: interactive, prompts for the token + a little terminal theatre ──
 if (cmd === 'docs') {
   if (JSON_OUT) { emit({ ok: true, docs: DOCS_URL, keys: KEYS_URL, key_help: KEY_GUIDE }); process.exit(0) }
@@ -140,6 +152,7 @@ const COMMANDS = {
   departments: { q: 'departments' },
   shoots:      { q: 'shoots', arg: '[--from YYYY-MM-DD --to YYYY-MM-DD] [flags]' },
   meetings:    { q: 'meetings', arg: '[--from YYYY-MM-DD --to YYYY-MM-DD] [flags]' },
+  clients:     { q: 'clients', arg: '["<name>"] [--all]' },
   studio:      { q: 'studio', arg: '[filter]' },
   'ps-issues': { q: 'ps_issues', admin: true },
   audit:       { q: 'audit', admin: true },
@@ -326,6 +339,7 @@ const DETAIL = {
   departments: { sum: 'The roster’s departments and their headcount.', extra: 'No argument. ACTIVE NOW = how many people in each department are tracking time.' },
   shoots:      { sum: 'The shoot schedule, recent and upcoming (company-wide).', extra: 'With no flags: the last 7 days onward. --from YYYY-MM-DD --to YYYY-MM-DD (both together) sets a range. Filters: --client "<name>" (partial), --type "<shoot type>", --status <Confirmed|Pending|Canceled...>. --include-removed adds removed shoots with when and why. --json returns every field: id, client_id, account, contract_month, extended, created_at, updated_at, removed_at, removed_reason.  e.g.  brello shoots --from 2026-10-01 --to 2026-10-31 --client Foodhall' },
   meetings:    { sum: 'Meetings with owner, attendees and minutes status.', extra: 'With no flags: 7 days back to 60 days ahead. --from YYYY-MM-DD --to YYYY-MM-DD, --client "<name>", --owner "<name>". Shows meetings your team organises or attends; --board shows the whole board. MINUTES is none, draft or submitted. The notes link opens the calendar event, where Gemini notes attach; the Roster does not store Gemini notes.  e.g.  brello meetings --from 2026-10-01 --to 2026-10-31 --owner Melani' },
+  clients:     { sum: 'The client directory: logo, Instagram handle and open cards.', extra: 'Optional argument: part of a client name. Active clients only unless you add --all. OPEN CARDS counts cards in your team (--board for the whole board). --json adds the logo URL, industry, account people and ids.  e.g.  brello clients food --json' },
   cards:       { sum: 'Every card in a stage, or matching your filters.', extra: 'Optional argument: a stage name. --board for the whole board, --unassigned for cards with no assignee, --client "<name>" to narrow by client, --history to add each card’s stage history (stage, entered and exited).  e.g.  brello cards "Ready for Sprint" --board --history' },
   'stage-stats': { sum: 'How each stage is used over the board’s history.', extra: 'No argument needed. --department "<name>" and --client "<name>" narrow it to matching cards; a family such as Design covers its departments.  e.g.  brello stage-stats --department "Video Edit"' },
   studio:      { sum: 'The Bricks Studio review feed — what is out for review.', extra: 'Optional argument: filter by submission, card or client name. Shows status, version, comments and client-view receipt. Self-service keys stay with your team and omit share/open URLs, even with --board. e.g. brello studio reel' },
@@ -362,6 +376,7 @@ const LEGENDS = {
   departments: 'PEOPLE = headcount · ACTIVE NOW = tracking time',
   shoots:      'TIME = start time · CREW = who’s on it · ACCOUNT = account owner · MONTH = contract month',
   meetings:    'START = Kuwait time · OWNER = organiser · MINUTES = none / draft / submitted',
+  clients:     'HANDLE = Instagram handle · OPEN CARDS = in your card scope · LOGO = has a logo',
   cards:       'STAGE = board list · HISTORY = stages it passed through, oldest first',
   studio:      'VERSION = latest Studio version · COMMENTS = review comments · CLIENT VIEWED = qualifying client share open',
   client:      'STAGE = board list · ASSIGNEE = owner · DUE = due date',
@@ -389,6 +404,7 @@ const EMPTY_HINTS = {
   studio:   'nothing in the Studio review feed',
   shoots:   'no shoots scheduled in that range',
   meetings: 'no meetings in that range',
+  clients:  'no clients matched that name',
 }
 const aliasName = (name) => name === 'ps_issues' ? 'ps-issues' : name
 function emptyLine(ctx) {
@@ -427,7 +443,7 @@ function help() {
       ['changelog', '', "What's new — every release"],
     ] },
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'leaves', 'departments'] },
-    { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
+    { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'clients', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
     { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'meetings', 'studio'] },
     { title: 'Act on cards', rows: [
       ['create', '"<title>" [flags]', 'Create a new card (--assignee --due --client --dept --priority --list)'],
@@ -550,6 +566,11 @@ if (def.q === 'shoots' || def.q === 'meetings') {
   }
   if (def.q === 'shoots' && flags.has('--include-removed')) params.include_removed = true
 }
+if (def.q === 'clients') {
+  const n = args.join(' ').trim()
+  if (n) params.q = n
+  if (flags.has('--all')) params.active = false
+}
 if (def.q === 'stage_stats') {
   const d = opts.department || opts.dept
   if (d) params.department = d.trim()
@@ -598,6 +619,9 @@ function humanRows(name, rows) {
       attendees: (m.attendees || []).map(a => a.name).join(', '), online: m.online ? 'yes' : '',
       minutes: m.minutes_status, by: m.minutes_by,
     }))
+  }
+  if (name === 'clients') {
+    return rows.map(c => ({ name: c.name, handle: c.instagram_handle ? '@' + String(c.instagram_handle).replace(/^@/, '') : '', open_cards: c.open_cards, logo: c.logo_url ? 'yes' : 'no' }))
   }
   if (name === 'cards' && rows.some(r => Array.isArray(r.history))) {
     return rows.map(({ history, stage_entered_at, dwell_basis, ...r }) => ({ ...r, history: (history || []).map(h => h.stage).join(' > ') }))

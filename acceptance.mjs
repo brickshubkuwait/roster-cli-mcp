@@ -79,6 +79,24 @@ const stats = await call('roster_stage_stats')
 ok(stats.count > 0 && stats.scope === 'board' && stats.data.every(s => 'cards_entered' in s && 'skip_pct' in s),
   `roster_stage_stats: ${stats.count} stages, board scope`)
 
+// 7b) 1.11.0 reads. Tools must be registered; live checks run once the
+// roster-query deploy that serves them is out (an older gateway answers
+// "unknown query", which is reported as pending, not failed).
+for (const t of ['roster_meetings', 'roster_clients']) ok(!!byName[t], `${t} is registered`)
+ok(!!byName.roster_shoots?.inputSchema?.properties?.from && !!byName.roster_cards?.inputSchema?.properties?.history, 'roster_shoots takes from/to, roster_cards takes history')
+const raw = async (name, args = {}) => (await client.callTool({ name, arguments: args })).content[0].text
+const pending = (text) => /unknown query/i.test(text)
+const meetingsText = await raw('roster_meetings')
+if (pending(meetingsText)) console.log('  · roster_meetings: gateway not deployed yet, live check pending')
+else {
+  const m = JSON.parse(meetingsText.replace(/\nNotice: .*$/, ''))
+  ok(Array.isArray(m.data) && m.data.every(x => ['none', 'draft', 'submitted'].includes(x.minutes_status) && Array.isArray(x.attendees)), `roster_meetings: ${m.count} meetings with minutes_status + attendees`)
+}
+const sh = await call('roster_shoots')
+ok(Array.isArray(sh.data) && sh.data.every(x => 'date' in x && 'client' in x), `roster_shoots default window: ${sh.count} shoots`)
+if ('removed_at' in (sh.data[0] || {})) ok(sh.data.every(x => x.removed_at === null && 'contract_month' in x && 'account' in x), 'roster_shoots rows carry the new fields; removed shoots left out by default')
+else console.log('  · roster_shoots: new fields pending the gateway deploy')
+
 // 8) changelog is local and matches the package version
 const chlog = await call('roster_changelog')
 const pkgVersion = JSON.parse(await (await import('node:fs/promises')).readFile(new URL('./package.json', import.meta.url), 'utf8')).version

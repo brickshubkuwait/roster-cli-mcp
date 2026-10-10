@@ -23,6 +23,7 @@ What each command returns.
 | `stage-stats` | Per stage over the board's history: cards entered, median and p90 dwell hours, skip rate. `--department "<name>"` and `--client "<name>"` narrow it to matching cards. |
 | `shoots` | The whole shoot schedule, company-wide. Without dates: the last 7 days onward. See [Shoots](#shoots). |
 | `meetings` | Meetings with owner, attendees and minutes status. See [Meetings](#meetings). |
+| `clients ["<name>"]` | The client directory. See [Clients](#clients). |
 
 CLI and MCP share the same per-key budget. Self-service keys see your team’s cards even when `--board` is supplied. Write actions need approval, assignments stay within your team, and archive is unavailable. Self-service responses omit share/open URLs, invoice details and delivery recipients.
 
@@ -62,6 +63,21 @@ Without dates: 7 days back to 60 days ahead. Shows meetings your team organises 
 | `minutes_status` | `none` (no minutes), `draft` (written, not submitted) or `submitted` |
 | `minutes_submitted_at` · `minutes_by` | When the minutes were submitted and who wrote them |
 | `gemini_notes_url` | The calendar event link, where Gemini notes attach. The Roster does not store Gemini notes. |
+
+## Clients
+
+`brello clients ["<name>"] [--all] [--board]`
+
+Active clients by default; `--all` adds archived ones. The table shows name, handle, open cards and whether there is a logo; `--json` returns every field. Claude uses `roster_clients`.
+
+| Field | What it is |
+|---|---|
+| `id` · `name` · `industry` · `is_active` | The client |
+| `logo_url` · `instagram_handle` | The client's Instagram picture and handle, null when not set |
+| `accounts` | The account people on the client |
+| `open_cards` | Open cards for the client in your team (`--board`: the whole board) |
+
+Card results that name a client (`cards`, `card`, `client`, `search`, `overdue`, `due`, `done`, `blocked`, `recent`, `studio`, `activity`, `comments`, `reactions`, `now`) also carry `client_logo_url` and `instagram_handle`. `team` and `user` carry `avatar_url` for each person. See them with `--json`.
 
 ## Card fields
 

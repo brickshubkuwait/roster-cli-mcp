@@ -73,6 +73,11 @@ server.tool('roster_shoots', 'The company-wide shoot schedule. Without dates: th
   status: z.string().optional().describe('status, e.g. Confirmed, Pending, Canceled'),
   include_removed: z.boolean().optional().describe('true also returns removed shoots, with removed_at and removed_reason'),
 }, wrap('shoots', a => ({ ...(a.from ? { from: a.from } : {}), ...(a.to ? { to: a.to } : {}), ...(a.client ? { client: a.client } : {}), ...(a.type ? { type: a.type } : {}), ...(a.status ? { status: a.status } : {}), ...(a.include_removed ? { include_removed: true } : {}) })))
+server.tool('roster_clients', 'Client directory for dashboards: id, name, logo_url (Instagram avatar, null when absent), instagram_handle, industry, is_active, accounts (account people), open_cards (open cards in your card scope; scope "board" counts the whole board). Active clients only unless active is false. Card tools that return a client name also return client_logo_url and instagram_handle; roster_team and roster_user_cards return avatar_url.', {
+  q: z.string().optional().describe('part of a client name'),
+  active: z.boolean().optional().describe('true (default) = active clients only; false = every client'),
+  scope: z.enum(['team', 'board']).optional().describe("'team' (default) = open_cards counts your team's cards; 'board' = the whole board"),
+}, wrap('clients', a => ({ ...(a.q ? { q: a.q } : {}), ...(typeof a.active === 'boolean' ? { active: a.active } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
 server.tool('roster_meetings', 'Meetings from the Roster calendar. Without dates: 7 days back to 60 days ahead (Kuwait days). Each meeting: id, client, title, kind, status, start, end (Kuwait time, ISO), owner (organiser), attendees [{name, email, internal, response}], online, location_mode, minutes_status (none = no minutes, draft = written but not submitted, submitted = pushed to the calendar event), minutes_submitted_at, minutes_by, gemini_notes_url (the calendar event link, where Gemini notes attach; the Roster does not store Gemini notes). Default scope "team" = meetings your team organises or attends; scope "board" = every meeting.', {
   from: z.string().optional().describe('start date YYYY-MM-DD (needs to)'),
   to: z.string().optional().describe('end date YYYY-MM-DD, inclusive (needs from)'),

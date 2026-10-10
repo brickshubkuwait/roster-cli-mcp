@@ -74,6 +74,7 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 | `brello stage-stats` | Stage usage over the board's history; `--department` and `--client` narrow it |
 | `brello shoots` | The company-wide shoot schedule; `--from`/`--to`, `--client`, `--type`, `--status`, `--include-removed` |
 | `brello meetings` | Meetings with owner, attendees and minutes status; `--from`/`--to`, `--client`, `--owner` |
+| `brello clients ["<name>"]` | Client directory with Instagram handle, logo and open cards; `--all` adds archived clients |
 
 Run `brello help` to see them all. Full reference: [QUERIES.md](./QUERIES.md).
 
@@ -82,7 +83,10 @@ Add `--json` to any command for scripts: the raw JSON response, with no banner a
 ```bash
 brello shoots --from 2026-10-01 --to 2026-10-31 --client Foodhall --json
 brello meetings --owner Melani --json
+brello clients --json
 ```
+
+With `--json`, card results that name a client carry `client_logo_url` and `instagram_handle`, and `team` and `user` carry `avatar_url`.
 
 Card changes (`brello move`, `brello due <card> <date>`, `brello assign`) take `--reason "<why>"`, which is recorded on the card. Taking a card out of Backlog needs a due date first (`DUE_REQUIRED`), and moving a missed due date to a later day needs a reason (`REASON_REQUIRED`).
 
