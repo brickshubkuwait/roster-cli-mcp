@@ -65,7 +65,7 @@ server.tool('roster_stage_stats', 'Stage usage over the board\'s WHOLE history (
   client: z.string().optional().describe('client name (partial OK)'),
 }, wrap('stage_stats', a => ({ ...(a.department ? { department: a.department } : {}), ...(a.client ? { client: a.client } : {}) })))
 server.tool('roster_departments', 'The roster’s departments and headcount', {}, wrap('departments'))
-server.tool('roster_shoots', 'The company-wide shoot schedule. Without dates: the last 7 days onward (first 120). With from + to (YYYY-MM-DD, both required): that range (up to 1000 rows). Each shoot: id, date, time, client, client_id, type, status, location, crew, account (the account owner, not in crew), contract_month, extended (Extended Session), created_at, updated_at, removed_at, removed_reason. Removed shoots are left out unless include_removed is true.', {
+server.tool('roster_shoots', 'The company-wide shoot schedule. Without dates: the last 7 days onward (first 120). With from + to (YYYY-MM-DD, both required): that range (up to 1000 rows). Each shoot: id, date, time, client, client_id, type, status, location, crew, account (the account owner, not in crew), contract_month, extended (Extended Session), created_at, updated_at, removed_at, removed_reason, readiness (what is still missing) and checklist. Removed shoots are left out unless include_removed is true.', {
   from: z.string().optional().describe('start date YYYY-MM-DD (needs to)'),
   to: z.string().optional().describe('end date YYYY-MM-DD, inclusive (needs from)'),
   client: z.string().optional().describe('client name, case-insensitive partial'),
@@ -85,6 +85,7 @@ server.tool('roster_meetings', 'Meetings from the Roster calendar. Without dates
   owner: z.string().optional().describe('organiser name (partial OK)'),
   scope: z.enum(['team', 'board']).optional().describe("'team' (default) = meetings your team organises or attends; 'board' = every meeting"),
 }, wrap('meetings', a => ({ ...(a.from ? { from: a.from } : {}), ...(a.to ? { to: a.to } : {}), ...(a.client ? { client: a.client } : {}), ...(a.owner ? { owner: a.owner } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
+server.tool('roster_readiness', 'Shoot readiness: every shoot in the next N days (default 7, up to 31) and what is still missing (plan, budget, models, props, call time). A 9:00 AM start is missing until someone confirms it. Company-wide, like roster_shoots.', { days: z.number().optional().describe('days ahead, default 7') }, wrap('readiness', a => (a.days ? { days: a.days } : {})))
 server.tool('roster_studio', 'Bricks Studio review feed — linked submissions with card/client, status, version, comments, client-view receipt, and open/share links. Optional text filter and team/board scope.', {
   q: z.string().optional().describe('optional filter by submission, card, or client name'),
   scope: z.enum(['team', 'board']).optional().describe("'team' (default) = your team’s cards; 'board' = the whole board"),

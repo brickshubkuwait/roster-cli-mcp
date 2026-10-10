@@ -72,9 +72,10 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 | `brello departments` | The roster's departments and headcount |
 | `brello cards ["<stage>"]` | Every card in a stage or matching filters; `--history` adds each card's stage history |
 | `brello stage-stats` | Stage usage over the board's history; `--department` and `--client` narrow it |
-| `brello shoots` | The company-wide shoot schedule; `--from`/`--to`, `--client`, `--type`, `--status`, `--include-removed` |
+| `brello shoots` | The company-wide shoot schedule; `--from`/`--to`, `--client`, `--type`, `--status`, `--include-removed`; each shoot has a readiness line |
 | `brello meetings` | Meetings with owner, attendees and minutes status; `--from`/`--to`, `--client`, `--owner` |
 | `brello clients ["<name>"]` | Client directory with Instagram handle, logo and open cards; `--all` adds archived clients |
+| `brello readiness [--days 7] [--json]` | Upcoming shoots and what is still missing: plan, budget, models, props, call time |
 
 Run `brello help` to see them all. Full reference: [QUERIES.md](./QUERIES.md).
 

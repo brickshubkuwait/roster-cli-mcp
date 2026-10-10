@@ -21,9 +21,10 @@ What each command returns.
 | `departments` | The roster's departments and their headcount. |
 | `cards ["<stage>"]` | Every card in a stage or matching the filters: id, title, client, assignee, stage, department, due, dwell. `--history` adds `history`: each stage the card passed through as `stage`, `entered_at`, `exited_at` (null while it is still there). |
 | `stage-stats` | Per stage over the board's history: cards entered, median and p90 dwell hours, skip rate. `--department "<name>"` and `--client "<name>"` narrow it to matching cards. |
-| `shoots` | The whole shoot schedule, company-wide. Without dates: the last 7 days onward. See [Shoots](#shoots). |
+| `shoots` | The whole shoot schedule, company-wide, each shoot with a readiness line. Without dates: the last 7 days onward. See [Shoots](#shoots). |
 | `meetings` | Meetings with owner, attendees and minutes status. See [Meetings](#meetings). |
 | `clients ["<name>"]` | The client directory. See [Clients](#clients). |
+| `readiness` | Shoots in the next `days` (default 7, up to 31) with what is still missing: plan, budget, models, props, call time. |
 
 CLI and MCP share the same per-key budget. Self-service keys see your team’s cards even when `--board` is supplied. Write actions need approval, assignments stay within your team, and archive is unavailable. Self-service responses omit share/open URLs, invoice details and delivery recipients.
 
@@ -46,6 +47,7 @@ Add `--json` to any command for machine output: the raw JSON response on stdout,
 | `extended` | true for an Extended Session |
 | `created_at` · `updated_at` | When the shoot was booked and last changed |
 | `removed_at` · `removed_reason` | When it was removed and the reason given (reasons are recorded from 10 Oct 2026) |
+| `readiness` · `checklist` | What is still missing before the day, and each item's status: plan, budget, models, props, call time (null for non-shoot activities) |
 
 ## Meetings
 
