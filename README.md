@@ -71,7 +71,7 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 | `brello now` | Live pulse — who's tracking now, what's due today, and the latest card moves |
 | `brello stages` | Board stages with your team's open card count in each |
 | `brello departments` | The roster's departments and headcount |
-| `brello cards ["<stage>"]` | Every card in a stage or matching filters; `--history` adds each card's stage history |
+| `brello cards ["<stage>"]` | Every card in a stage or matching filters; `--history` adds each card's stage history; `--created-after` / `--created-before YYYY-MM-DD`; 200 a page, `--limit` up to 1000 and `--offset` for the next page |
 | `brello stage-stats` | Stage usage over the board's history; `--department` and `--client` narrow it |
 | `brello shoots` | The company-wide shoot schedule; `--from`/`--to`, `--client`, `--type`, `--status`, `--include-removed`; each shoot has a readiness line |
 | `brello meetings` | Meetings with owner, attendees and minutes status; `--from`/`--to`, `--client`, `--owner` |
