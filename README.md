@@ -63,6 +63,7 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 | `brello card <id>` | Every field on a card — workflow, Studio, Salesforce, send/view receipt, Slack thread, sizes and copy |
 | `brello studio [filter]` | Bricks Studio review feed — status/version, comments, client views, and open/share links |
 | `brello client "<name>"` | Everything for one client — every in-scope card (live + done), who's on it, with open/done/overdue totals |
+| `brello scope "<client>" --month YYYY-MM` | One client in one month: what the contract sold vs what was shot, delivered and approved, per contract, plus special requests. `?` means unknown and a note says why. Add `--json` for the raw response. e.g. `brello scope "Sedra" --month 2026-10` |
 | `brello due [days]` | Cards due soon — the next N days (default 7), soonest first |
 | `brello done [days]` | Recently completed cards — the last N days (default 14) |
 | `brello blocked` | Blocked or stuck cards — explicit blockers, or overdue by 3+ days |

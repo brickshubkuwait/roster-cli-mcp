@@ -67,6 +67,10 @@ server.tool('roster_studio', 'Bricks Studio review feed — linked submissions w
   scope: z.enum(['team', 'board']).optional().describe("'team' (default) = your team’s cards; 'board' = the whole board"),
 }, wrap('studio', a => ({ ...(a.q ? { q: a.q } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
 server.tool('roster_client', 'Everything for one client — every card assigned to your team (live + done), who is on it, with open/done/overdue totals (team scope only)', { client: z.string().describe('client name (partial OK)') }, wrap('client', a => ({ client: a.client })))
+server.tool('roster_scope', 'One client in one month: what the contract sold (Salesforce quote) vs what was shot, delivered to the client and approved in Studio, one entry per contract live in that month, plus special requests. Null means unknown and every null has a line in notes. No money is returned.', {
+  client: z.string().describe('client name (partial OK)'),
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().describe('YYYY-MM, default this month'),
+}, wrap('scope', a => ({ client: a.client, ...(a.month ? { month: a.month } : {}) })))
 server.tool('roster_due', 'Your team\'s cards due soon — the next N days (default 7), soonest first (team scope only)', { days: z.number().optional().describe('days ahead, default 7') }, wrap('due', a => (a.days ? { days: a.days } : {})))
 server.tool('roster_done', 'Your team\'s recently completed cards — the last N days (default 14) (team scope only)', { days: z.number().optional().describe('days back, default 14') }, wrap('done', a => (a.days ? { days: a.days } : {})))
 server.tool('roster_blocked', 'Your team\'s blocked or stuck cards — explicit blockers, or overdue by 3+ days (team scope only)', {}, wrap('blocked'))
