@@ -19,6 +19,9 @@ import { join } from 'node:path'
 const ARGV = process.argv.slice(2)
 const JSON_OUT = ARGV.includes('--json')
 const [cmd, ...rest] = ARGV.filter(a => a !== '--json')
+// Pipes are async in Node, and the many process.exit() calls below would cut
+// piped output at 64 KB (brello clients --json | jq). Blocking writes flush first.
+for (const s of [process.stdout, process.stderr]) s._handle?.setBlocking?.(true)
 const emit = (o) => process.stdout.write(JSON.stringify(o, null, 2) + '\n')
 function emitError(e, extra = {}) {
   emit({ ok: false, error: describeError(e, extra), code: e?.code || null, status: e?.status || null })
