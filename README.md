@@ -54,7 +54,6 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 | `brello overdue` | Cards past their due date and not done |
 | `brello workload` | Open + overdue cards per person |
 | `brello active` | Who's tracking time right now (live Hubstaff) |
-| `brello leaves` | Upcoming time off for your team (Vacation Tracker) |
 | `brello comments` | Recent comments on your team's cards |
 | `brello reactions` | Recent emoji reactions on your team's cards |
 | `brello activity` | Card history — moves (stage→stage), comments, splits, edits |
@@ -101,7 +100,7 @@ Card changes (`brello move`, `brello due <card> <date>`, `brello assign`) take `
 
 CLI and MCP share the same budget per key. Self-service card access stays with your team, even with `--board`. Write actions need individual approval, assignments stay within your team, and archive is unavailable. Self-service responses omit share/open URLs, invoice details and delivery recipients.
 
-Each call returns a sensible page: `search` up to 50 cards, `comments` / `reactions` the latest 40, `leaves` the next 60 upcoming.
+Each call returns a sensible page: `search` up to 50 cards, `comments` / `reactions` the latest 40.
 
 ## Use it from Claude (MCP)
 

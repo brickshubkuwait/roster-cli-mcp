@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Brello CLI — query your team's work.
 //   brello auth   (one time, or  pbpaste | brello login)   then:
-//   brello stats | team | overdue | workload | active | leaves
+//   brello stats | team | overdue | workload | active
 //   brello comments | reactions | search "<text>" | card <id> | shoots | meetings | readiness | help
 //   Add --json to any command for machine output (raw JSON, no banner, no colour).
 import { callRoster, QUERIES, clearToken, getToken, ensureRosterDir, describeError, isLegacyKey, CONNECT_URL } from './lib/client.mjs'
@@ -138,7 +138,6 @@ const COMMANDS = {
   overdue:     { q: 'overdue' },
   workload:    { q: 'workload' },
   active:      { q: 'active' },
-  leaves:      { q: 'leaves' },
   comments:    { q: 'comments' },
   reactions:   { q: 'reactions' },
   activity:    { q: 'activity' },
@@ -392,7 +391,6 @@ const DETAIL = {
   overdue:     { sum: 'Cards that are past their due date and not yet done.', extra: 'No argument. Sorted oldest-first; the LATE column shows how many days each one has slipped.' },
   workload:    { sum: 'How loaded each person is — open, overdue and done counts.', extra: 'No argument. Sorted by who has the most open cards; NEXT DUE is their soonest upcoming deadline.' },
   active:      { sum: 'Who is tracking time right this second (live Hubstaff timers).', extra: 'No argument. FOR is how long the timer has been running; SINCE is when it started.' },
-  leaves:      { sum: 'Upcoming approved time off for your team (Vacation Tracker).', extra: 'No argument. Sorted soonest-first; IN DAYS counts down to each day off.' },
   comments:    { sum: 'The latest comments left on your team’s cards.', extra: 'No argument. Newest first. Mentions of hidden people are redacted to [hidden].' },
   reactions:   { sum: 'Recent emoji reactions on your team’s cards.', extra: 'No argument. Newest first; only reactions left by your own team are shown.' },
   activity:    { sum: 'A feed of everything that happened on your team’s cards.', extra: 'No argument. Moves between stages, comments, reassignments, splits and edits — newest first.' },
@@ -401,7 +399,7 @@ const DETAIL = {
   card:        { sum: 'Everything about a single card.', extra: 'Argument: a card id (the first 8 characters are enough). Shows workflow, tracked effort, Studio submissions, review context, Slack thread, deliverable sizes and approved EN/AR copy. Self-service keys omit share/open URLs, invoices and delivery recipients. e.g. brello card 1c11685c' },
   stages:      { sum: 'The board’s workflow stages and how full each one is.', extra: 'No argument. CARDS = your team’s open cards in that stage; OVERDUE = how many of those are late.' },
   departments: { sum: 'The roster’s departments and their headcount.', extra: 'No argument. ACTIVE NOW = how many people in each department are tracking time.' },
-  shoots:      { sum: 'The shoot schedule, recent and upcoming (company-wide).', extra: 'With no flags: the last 7 days onward. --from YYYY-MM-DD --to YYYY-MM-DD (both together) sets a range. Filters: --client "<name>" (partial), --type "<shoot type>", --status <Confirmed|Pending|Canceled...>. --include-removed adds removed shoots with when and why. --json returns every field: id, client_id, account, contract_month, extended, created_at, updated_at, removed_at, removed_reason. Each shoot also carries a readiness line (what is still missing).  e.g.  brello shoots --from 2026-10-01 --to 2026-10-31 --client Foodhall' },
+  shoots:      { sum: 'The shoot schedule, recent and upcoming (company-wide).', extra: 'With no flags: the last 7 days onward. --from YYYY-MM-DD --to YYYY-MM-DD (both together) sets a range. Filters: --client "<name>" (partial), --type "<shoot type>", --status <Confirmed|Pending|Canceled...>. --include-removed adds removed shoots with when and why. --json returns every field: id, code, client_id, account, contract_month, extended, session (2 of 4), scope, outputs (what the session is for, with quantities), models and models_arranged, prep (props, casting, wardrobe, setup, permit), drone_pilot, production_assistant, end_time, reel times, completed, feedback_session, jida_project_id, created_at, updated_at, removed_at, removed_reason. Money and HR fields are never returned. Each shoot also carries a readiness line (what is still missing).  e.g.  brello shoots --from 2026-10-01 --to 2026-10-31 --client Foodhall' },
   meetings:    { sum: 'Meetings with owner, attendees and minutes status.', extra: 'With no flags: 7 days back to 60 days ahead. --from YYYY-MM-DD --to YYYY-MM-DD, --client "<name>", --owner "<name>". Shows meetings your team organises or attends; --board shows the whole board. MINUTES is none, draft or submitted. The notes link opens the calendar event, where Gemini notes attach; the Roster does not store Gemini notes.  e.g.  brello meetings --from 2026-10-01 --to 2026-10-31 --owner Melani' },
   clients:     { sum: 'The client directory: logo, Instagram handle and open cards.', extra: 'Optional argument: part of a client name. Active clients only unless you add --all. OPEN CARDS counts cards in your team (--board for the whole board). --json adds the logo URL, industry, account people and ids.  e.g.  brello clients food --json' },
   cards:       { sum: 'Every card in a stage, or matching your filters.', extra: 'Optional argument: a stage name. --board for the whole board, --unassigned for cards with no assignee, --client "<name>" to narrow by client, --history to add each card’s stage history (stage, entered and exited), --created-after / --created-before YYYY-MM-DD for cards made in a date range (Kuwait days). Returns 200 cards a page by default: --limit up to 1000, and --offset N for the next page (the response says which offset is next).  e.g.  brello cards "Ready for Sprint" --board --history   ·   brello cards --board --created-after 2026-10-01 --limit 1000' },
@@ -432,7 +430,6 @@ const LEGENDS = {
   overdue:     'LATE = days past due',
   workload:    'OPEN = not done · OVERDUE = late · NEXT DUE = soonest deadline · TRACKING = live timer',
   active:      'FOR = timer running time · SINCE = when it started',
-  leaves:      'IN DAYS = days until the day off · HALF = half-day portion',
   comments:    'BY = author · AT = when it was posted',
   reactions:   'BY = who reacted · AT = when',
   activity:    'DID = what happened · WHO = who did it · WHEN = timestamp',
@@ -440,7 +437,7 @@ const LEGENDS = {
   user:        'STATUS = live / done / archived · STARTED→ENDED→DONE = work timeline',
   stages:      'CARDS = open cards here · OVERDUE = how many are late',
   departments: 'PEOPLE = headcount · ACTIVE NOW = tracking time',
-  shoots:      'TIME = start time · CREW = who’s on it · ACCOUNT = account owner · MONTH = contract month · READINESS = what is still missing',
+  shoots:      'TIME = start time · CREW = who’s on it · ACCOUNT = account owner · MONTH = contract month · MODELS = models needed (✓ = arranged) · READINESS = what is still missing',
   meetings:    'START = Kuwait time · OWNER = organiser · MINUTES = none / draft / submitted',
   clients:     'HANDLE = Instagram handle · OPEN CARDS = in your card scope · LOGO = has a logo',
   cards:       'STAGE = board list · HISTORY = stages it passed through, oldest first',
@@ -458,7 +455,6 @@ const LEGENDS = {
 // Context-aware empty-state lines (the generic fallback is kept for anything not listed).
 const EMPTY_HINTS = {
   overdue:  'no overdue cards — your team is all caught up',
-  leaves:   'no upcoming time off on the calendar',
   active:   'no one is tracking time right now',
   now:      'no one is tracking time right now',
   comments: 'no comments yet on your team’s cards',
@@ -511,7 +507,7 @@ function help() {
       ['logout', '', 'Remove your saved key'],
       ['changelog', '', "What's new — every release"],
     ] },
-    { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'leaves', 'departments'] },
+    { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'departments'] },
     { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'clients', 'scope', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
     { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'meetings', 'readiness', 'studio'] },
     { title: 'Act on cards', rows: [
@@ -709,6 +705,7 @@ function humanRows(name, rows) {
     return rows.map(s => ({
       date: s.date, time: s.time, client: s.client, type: s.type, status: s.status, location: s.location,
       crew: s.crew, account: s.account, month: s.contract_month, extended: s.extended ? 'yes' : '',
+      models: typeof s.models === 'number' ? (s.models ? `${s.models}${s.models_arranged ? ' ✓' : ''}` : '0') : '',
       ...(s.readiness !== undefined ? { readiness: s.readiness } : {}),
       ...(removed ? { removed: s.removed_at ? String(s.removed_at).slice(0, 10) : '', why: s.removed_reason || '' } : {}),
     }))

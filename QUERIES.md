@@ -11,7 +11,6 @@ What each command returns.
 | `overdue` | Cards past their due date and not done — card, client, assignee, due date. |
 | `workload` | Open + overdue card counts per person, so you can see who's buried. |
 | `active` | Who is tracking time right now, and on which card (live Hubstaff). |
-| `leaves` | Upcoming approved time off for your team — person, date, type (Vacation Tracker). |
 | `comments` | Recent comments on your team's cards — card, author, comment, date. |
 | `reactions` | Recent emoji reactions on your team's cards — card, who, emoji, date. |
 | `activity` | Card history — who moved a card (stage→stage), commented, split, reassigned, or edited it, and when. |
@@ -151,7 +150,6 @@ A team key reads a client only when that client has cards on its team. People ar
 | Administrator-issued requests | 180 / minute per key |
 | `search` | up to 50 cards |
 | `comments`, `reactions` | latest 40 |
-| `leaves` | next 60 upcoming |
 | `overdue`, `workload` | all matching |
 
 ## Examples
