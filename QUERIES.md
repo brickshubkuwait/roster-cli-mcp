@@ -19,7 +19,8 @@ What each command returns.
 | `card <id>` | Full card detail — description, stage, priority, assignee, collaborators, subtasks, split task, linked cards, due. |
 | `stages` | The board's workflow stages (lists) with your team's open card count in each. |
 | `departments` | The roster's departments and their headcount. |
-| `shoots` | The whole shoot schedule, company-wide — date, client, type, crew (recent + upcoming). |
+| `shoots` | The whole shoot schedule, company-wide: date, client, type, crew (recent and upcoming), plus a readiness line per shoot. |
+| `readiness` | Shoots in the next `days` (default 7, up to 31) with what is still missing: plan, budget, models, props, call time. |
 
 CLI and MCP share the same per-key budget. Self-service keys see your team’s cards even when `--board` is supplied. Write actions need approval, assignments stay within your team, and archive is unavailable. Self-service responses omit share/open URLs, invoice details and delivery recipients.
 

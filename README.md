@@ -71,6 +71,7 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 | `brello stages` | Board stages with your team's open card count in each |
 | `brello departments` | The roster's departments and headcount |
 | `brello shoots` | The whole shoot schedule — recent + upcoming, company-wide |
+| `brello readiness [--days 7] [--json]` | Upcoming shoots and what is still missing: plan, budget, models, props, call time |
 
 Run `brello help` to see them all. Full reference: [QUERIES.md](./QUERIES.md).
 

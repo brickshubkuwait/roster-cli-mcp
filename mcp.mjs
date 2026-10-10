@@ -61,7 +61,8 @@ server.tool('roster_stage_cards', 'Every card currently in ONE stage (list) — 
 }, wrap('cards', a => ({ stage: a.stage, ...(a.assignee ? { assignee: a.assignee } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
 server.tool('roster_stage_stats', 'Stage usage over the board\'s WHOLE history (since 2026-06-06, all teams): per stage — distinct cards ever entered, median + p90 dwell hours (completed segments), and skip-rate (share of forward moves that jumped past the stage). Aggregates only, no names. Use to judge whether a column is actually used and what "normal" dwell looks like.', {}, wrap('stage_stats'))
 server.tool('roster_departments', 'The roster’s departments and headcount', {}, wrap('departments'))
-server.tool('roster_shoots', 'The whole shoot schedule — recent + upcoming, company-wide (date, client, type, crew)', {}, wrap('shoots'))
+server.tool('roster_shoots', 'The whole shoot schedule, recent and upcoming, company-wide (date, client, type, crew, readiness)', {}, wrap('shoots'))
+server.tool('roster_readiness', 'Shoot readiness: every shoot in the next N days (default 7, up to 31) and what is still missing (plan, budget, models, props, call time). A 9:00 AM start is missing until someone confirms it. Company-wide, like roster_shoots.', { days: z.number().optional().describe('days ahead, default 7') }, wrap('readiness', a => (a.days ? { days: a.days } : {})))
 server.tool('roster_studio', 'Bricks Studio review feed — linked submissions with card/client, status, version, comments, client-view receipt, and open/share links. Optional text filter and team/board scope.', {
   q: z.string().optional().describe('optional filter by submission, card, or client name'),
   scope: z.enum(['team', 'board']).optional().describe("'team' (default) = your team’s cards; 'board' = the whole board"),

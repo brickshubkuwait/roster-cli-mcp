@@ -2,7 +2,7 @@
 // Brello CLI — query your team's work.
 //   brello auth   (one time, or  pbpaste | brello login)   then:
 //   brello stats | team | overdue | workload | active | leaves
-//   brello comments | reactions | search "<text>" | card <id> | shoots | help
+//   brello comments | reactions | search "<text>" | card <id> | shoots | readiness | help
 import { callRoster, QUERIES, clearToken, getToken, ensureRosterDir, describeError, isLegacyKey, CONNECT_URL } from './lib/client.mjs'
 import { printNotice, printLegacyHint } from './lib/auth.mjs'
 import { CHANGELOG, VERSION } from './lib/changelog.mjs'
@@ -61,6 +61,7 @@ function paint(col, val) {
   if (col === 'status') return s === 'live' ? c.green(s) : s === 'done' ? c.cyan(s) : s === 'archived' ? c.grey(s) : s
   if (col === 'open_threads' || col === 'overdue') return (+s > 0) ? c.amber(s) : c.dim(s)
   if (col === 'done') return s === 'true' ? c.green('✓') : s === 'false' ? c.dim('·') : s
+  if (col === 'missing') return s === 'ready' ? c.green('✓ ready') : c.amber(s)
   return s
 }
 
@@ -125,6 +126,7 @@ const COMMANDS = {
   'stage-stats': { q: 'stage_stats' },
   departments: { q: 'departments' },
   shoots:      { q: 'shoots' },
+  readiness:   { q: 'readiness', arg: '[--days 7] [--json]' },
   studio:      { q: 'studio', arg: '[filter]' },
   'ps-issues': { q: 'ps_issues', admin: true },
   audit:       { q: 'audit', admin: true },
@@ -260,6 +262,24 @@ function table(rows, ctx) {
   console.log(bar('└', '┴', '┘'))
 }
 
+// Some reads return nested detail that does not fit a terminal table. Keep
+// the table to the columns people scan; --json still has everything.
+function displayRows(q, rows) {
+  if (!Array.isArray(rows)) return rows
+  if (q === 'shoots') return rows.map(({ checklist, ...row }) => row)
+  if (q === 'readiness') {
+    return rows.map(r => ({
+      date: r.date,
+      in: r.in_days === 0 ? 'today' : r.in_days === 1 ? '1 day' : `${r.in_days} days`,
+      time: r.time || '',
+      client: r.client || '',
+      account: r.account || '',
+      missing: r.ready ? 'ready' : r.missing,
+    }))
+  }
+  return rows
+}
+
 function printObject(o) {
   // Left-bar key/value list (used for stats + a single card) instead of raw JSON.
   if (o == null) { console.log(c.dim('  · nothing here right now')); return }
@@ -306,6 +326,7 @@ const DETAIL = {
   stages:      { sum: 'The board’s workflow stages and how full each one is.', extra: 'No argument. CARDS = your team’s open cards in that stage; OVERDUE = how many of those are late.' },
   departments: { sum: 'The roster’s departments and their headcount.', extra: 'No argument. ACTIVE NOW = how many people in each department are tracking time.' },
   shoots:      { sum: 'The shoot schedule — recent and upcoming (company-wide).', extra: 'No argument. The company-wide schedule shows when a shoot is and who is on the crew.' },
+  readiness:   { sum: 'Upcoming shoots and what is still missing before the day.', extra: 'Optional: --days N (default 7, up to 31). Lists every shoot in the next N days with what is not settled yet: plan, budget, models, props and call time. A 9:00 AM start counts as missing until someone confirms it. Add --json for the full detail, including each item\'s status and the plan and approval links.  e.g.  brello readiness --days 5' },
   studio:      { sum: 'The Bricks Studio review feed — what is out for review.', extra: 'Optional argument: filter by submission, card or client name. Shows status, version, comments and client-view receipt. Self-service keys stay with your team and omit share/open URLs, even with --board. e.g. brello studio reel' },
   client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).  e.g.  brello client Foodhall' },
   due:         { sum: 'Cards coming due soon — or set one card’s due date.', extra: 'With a number (or nothing): your team’s cards due in the next N days (default 7).  With a card id/name + a date: sets that card’s due date; pass "clear" to remove it. Moving a missed due date later needs  --reason "<why>"  (REASON_REQUIRED).  e.g.  brello due 3   ·   brello due 1c11685c 2026-07-20 --reason "client moved the shoot"' },
@@ -339,6 +360,7 @@ const LEGENDS = {
   stages:      'CARDS = open cards here · OVERDUE = how many are late',
   departments: 'PEOPLE = headcount · ACTIVE NOW = tracking time',
   shoots:      'TIME = start time · CREW = who’s on it (first few)',
+  readiness:   'IN = days until the shoot · MISSING = plan, budget, models, props or call time not settled yet',
   studio:      'VERSION = latest Studio version · COMMENTS = review comments · CLIENT VIEWED = qualifying client share open',
   client:      'STAGE = board list · ASSIGNEE = owner · DUE = due date',
   due:         'DUE = due date · IN = days until due',
@@ -364,6 +386,7 @@ const EMPTY_HINTS = {
   client:   'no cards for that client in your scope',
   studio:   'nothing in the Studio review feed',
   shoots:   'no shoots scheduled in that range',
+  readiness:'no shoots in that window',
 }
 const aliasName = (name) => name === 'ps_issues' ? 'ps-issues' : name
 function emptyLine(ctx) {
@@ -402,7 +425,7 @@ function help() {
     ] },
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'leaves', 'departments'] },
     { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
-    { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'studio'] },
+    { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'readiness', 'studio'] },
     { title: 'Act on cards', rows: [
       ['create', '"<title>" [flags]', 'Create a new card (--assignee --due --client --dept --priority --list)'],
       ['comment', '<card> <text>', 'Add a comment to a card'],
@@ -460,6 +483,13 @@ for (let i = 0; i < rest.length; i++) {
   if (rest[i] === '--reason') { reason = rest[i + 1] ?? ''; rest.splice(i, 2); break }
   if (rest[i].startsWith('--reason=')) { reason = rest[i].slice('--reason='.length); rest.splice(i, 1); break }
 }
+// --days takes a value (brello readiness --days 5); pull it out before the
+// generic flag split so the number is not read as an argument.
+let daysFlag = null
+for (let i = 0; i < rest.length; i++) {
+  if (rest[i] === '--days') { daysFlag = rest[i + 1] ?? ''; rest.splice(i, 2); break }
+  if (rest[i].startsWith('--days=')) { daysFlag = rest[i].slice('--days='.length); rest.splice(i, 1); break }
+}
 const flags = new Set(rest.filter(a => a.startsWith('--')))
 const args = rest.filter(a => !a.startsWith('--'))
 
@@ -510,6 +540,27 @@ if (def.q === 'client') {
 if (def.q === 'due')    { const n = parseInt(args[0], 10); if (Number.isFinite(n)) params.days = n; }
 if (def.q === 'done')   { const n = parseInt(args[0], 10); if (Number.isFinite(n)) params.days = n; }
 if (def.q === 'recent') { const n = parseInt(args[0], 10); if (Number.isFinite(n)) params.n = n; }
+if (def.q === 'readiness') {
+  const raw = daysFlag ?? args[0]
+  if (raw !== undefined) {
+    const n = parseInt(raw, 10)
+    if (!Number.isFinite(n) || n < 1) { console.error('--days takes a number of days, e.g.   brello readiness --days 5'); process.exit(1) }
+    params.days = n
+  }
+}
+if (daysFlag !== null && def.q !== 'readiness') { console.error('--days works with readiness. For due and done, pass the number, e.g.   brello due 3'); process.exit(1) }
+
+// --json: the raw gateway response, for scripts. No spinner noise on stdout.
+if (flags.has('--json')) {
+  try {
+    const r = await callRoster(def.q, params)
+    console.log(JSON.stringify(r, null, 2))
+    process.exit(0)
+  } catch (e) {
+    console.error('✖ ' + describeError(e))
+    process.exit(1)
+  }
+}
 
 try {
   const r = await withSpinner(`querying · ${cmd}`, () => callRoster(def.q, params))
@@ -533,7 +584,7 @@ try {
     console.log('  ' + c.dim('─'.repeat(vlen(head))) + '\n')
   }
   if (Array.isArray(r.data)) {
-    table(r.data, cmd)
+    table(displayRows(def.q, r.data), cmd)
     const leg = legendFor(cmd)
     if (leg && r.data.length && typeof r.data[0] === 'object' && Object.keys(r.data[0]).length >= 4) {
       console.log('  ' + c.dim('legend:  ') + c.dim(leg))
