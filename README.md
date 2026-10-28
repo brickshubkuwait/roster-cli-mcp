@@ -91,6 +91,31 @@ With `--json`, card results that name a client carry `client_logo_url` and `inst
 
 Card changes (`brello move`, `brello due <card> <date>`, `brello assign`) take `--reason "<why>"`, which is recorded on the card. Taking a card out of Backlog needs a due date first (`DUE_REQUIRED`), and moving a missed due date to a later day needs a reason (`REASON_REQUIRED`).
 
+## Studio
+
+Bricks Studio works from the same key: submissions, review comments, versions, Creative Plans and clients. Studio answers as your own Studio login, so you see what you see there. Ids can be the first 8 characters.
+
+| Command | What it does |
+|---|---|
+| `brello studio submissions ["<filter>"]` | Studio submissions with client and internal status; `--client "<name>"`, `--status <s>`, `--type <t>`, `--mine`, `--limit n`, `--offset n` |
+| `brello studio submission <id>` | Every version with its files and their preview and download links, plus the Studio link |
+| `brello studio comments <id>` | Review comments with version, author, timecode and file; `--version n`; `--csv` prints a spreadsheet, e.g. `brello studio comments 1c11685c --csv > comments.csv` |
+| `brello studio comment <id> "<text>"` | Add a team comment; `--at 0:42` pins it to a moment, `--version n` to a version, `--file <fileId>` to one file. The client never sees team comments |
+| `brello studio upload <id> <file...>` | Upload a new version from images (jpg, png, webp, gif, heic) or a video (mp4, mov, webm), not both at once. It starts hidden from the client; `--label "<option label>"` and `--option-of <versionId>` add it as an option |
+| `brello studio status <id> <approve\|changes\|clear>` | Set the internal review status; `--note "<text>"`, `--version-id <id>`. The client's own verdict is never set here |
+| `brello studio plans ["<filter>"]` | Creative Plans; `--client "<name>"`, `--status DRAFT\|READY`, `--mine`, `--limit n` |
+| `brello studio plan <id>` | One plan in full and the fields you can change |
+| `brello studio plan <id> --set field=value` | Change a plan: `name`, `status`, `shootDate`, `shootLocation`, `shootDuration`, `clientBrief`. `--set` repeats, e.g. `--set name="Eid shoot" --set status=READY` |
+| `brello studio clients ["<filter>"]` | Studio clients with submission, plan and item counts; `--all` adds inactive clients |
+| `brello studio items <client id or name> ["<filter>"]` | A client's items catalog; `--plans` adds items named on the client's plans |
+| `brello studio whoami` | Your Studio account and the Studio permissions on your key |
+
+Reads work on every key. Comments, uploads, status changes and plan changes need the matching Studio permission on your key (post team comments, upload a new version, change the internal status, edit plans), which you ask for on the [Connect page](https://roster.bricks.com.kw/connect). Sending to a client, share links, client approval and delete stay in Studio.
+
+`brello studio` with a filter (for example `brello studio reel`) is still the Roster review feed.
+
+Claude gets the same through `studio_whoami`, `studio_submissions`, `studio_submission`, `studio_comments`, `studio_comment`, `studio_upload`, `studio_status`, `studio_plans`, `studio_plan`, `studio_plan_edit`, `studio_clients` and `studio_client_items`.
+
 ## Limits
 
 | Surface | Limit |

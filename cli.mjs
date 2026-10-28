@@ -9,6 +9,7 @@ import { printNotice, printLegacyHint } from './lib/auth.mjs'
 import { CHANGELOG, VERSION } from './lib/changelog.mjs'
 import { DOCS_URL, KEYS_URL, KEY_GUIDE } from './lib/docs.mjs'
 import { parseScopeArgs, deliverableRows, extraRows, entryHeading } from './lib/scope.mjs'
+import { STUDIO_SUBS, parseStudioArgs, runStudioRequest } from './lib/studio.mjs'
 import { homedir } from 'node:os'
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -323,6 +324,123 @@ async function runScope(rest) {
   printNotice('\n\n')
 }
 
+// studio <command>: Bricks Studio with the same key. --json prints Studio's
+// response untouched; comments --csv prints the CSV body and nothing else.
+const id8 = (v) => (v ? String(v).slice(0, 8) : '')
+const day = (v) => (v ? String(v).slice(0, 10) : '')
+const link = (url, label) => (url ? (TTY ? osc8(url, c.cyan(label)) : url) : '')
+function scalars(o, skip = []) {
+  const out = {}
+  for (const [k, v] of Object.entries(o || {})) {
+    if (skip.includes(k) || v === null || v === undefined || v === '' || typeof v === 'object') continue
+    out[k] = typeof v === 'string' ? trunc(v.replace(/\s+/g, ' '), 120) : v
+  }
+  return out
+}
+function pageLine(r, sub) {
+  if (typeof r.count !== 'number') return
+  const shown = Array.isArray(r.data) ? r.data.length : 0
+  const more = r.next_offset != null ? `  ·  next page:  brello studio ${sub} --offset ${r.next_offset}` : ''
+  console.log('  ' + c.dim(`${shown} of ${r.count}${more}`))
+}
+function studioRender(sub, r) {
+  const d = r.data
+  if (sub === 'whoami') {
+    const u = r.user || {}, k = r.key || {}
+    printObject({ name: u.name, email: u.email, org: u.orgSlug, role: u.orgRole, access: u.access, view_only: u.readOnly ? 'yes' : 'no', key: k.label, expires: k.expiresAt, studio_permissions: (k.studio || []).length ? k.studio.join(', ') : 'none yet, ask on the Connect page' })
+    return
+  }
+  if (sub === 'submissions') {
+    table((d || []).map(s => ({ id: id8(s.id), title: s.title, client: s.client, type: s.type, status: s.status, internal: s.internalStatus, version: s.latest?.label || s.latest?.number || '', comments: s.comments, updated: day(s.updatedAt) })))
+    pageLine(r, sub)
+    return
+  }
+  if (sub === 'submission') {
+    console.log(`\n${c.cyan('❯')} ${c.bold(d.title || id8(d.id))}${c.dim('  ' + [d.client, d.type].filter(Boolean).join(' · '))}`)
+    printObject({ id: d.id, status: d.status, internal: d.internalStatus, owner: d.owner, plan: d.plan?.name, comments: d.comments, shared: d.shared ? 'yes' : 'no', updated: day(d.updatedAt) })
+    const versions = d.versions || []
+    console.log('')
+    table(versions.map(v => ({ version: v.label || v.number, id: id8(v.id), status: v.status, internal: v.internalStatus, client_sees: v.hiddenFromClient ? 'hidden' : 'yes', files: (v.files || []).length, by: v.uploadedBy, at: day(v.createdAt) })))
+    for (const v of versions) {
+      if (!(v.files || []).length) continue
+      console.log('\n  ' + c.bold(String(v.label || 'v' + v.number)) + c.dim('  files'))
+      for (const f of v.files) {
+        const links = [link(f.preview, 'preview'), link(f.download, 'download')].filter(Boolean)
+        console.log('  ' + c.dim('▸ ') + f.fileName + c.dim('  ' + id8(f.id)) + (TTY ? '  ' + links.join(c.dim(' · ')) : ''))
+        if (!TTY) for (const [label, url] of [['preview', f.preview], ['download', f.download]]) if (url) console.log('      ' + label + ': ' + url)
+      }
+    }
+    if (d.url) console.log('\n  ' + c.dim('open: ') + d.url)
+    return
+  }
+  if (sub === 'comments') {
+    table((d || []).map(x => ({ at: String(x.createdAt || '').slice(0, 16).replace('T', ' '), version: x.versionLabel || x.version, by: x.author, type: x.type, timecode: x.timecode || '', file: x.file || '', comment: x.body, resolved: x.resolved ? 'yes' : '' })))
+    if (r.url) console.log('\n  ' + c.dim('open: ') + r.url)
+    return
+  }
+  if (sub === 'comment') {
+    console.log('  ' + c.green('✓') + ' team comment added' + c.dim(`  ·  ${d?.versionLabel || 'v' + (d?.version ?? '?')}${d?.timecode ? ' at ' + d.timecode : ''}`))
+    if (r.url) console.log('  ' + c.dim('open: ') + r.url)
+    return
+  }
+  if (sub === 'upload') {
+    console.log('  ' + c.green('✓') + ` uploaded ${d?.label || 'version ' + (d?.number ?? '')}` + c.dim(`  ·  ${(d?.files || []).length} file${(d?.files || []).length === 1 ? '' : 's'}  ·  hidden from the client until it is sent from Studio`))
+    if (r.url) console.log('  ' + c.dim('open: ') + r.url)
+    return
+  }
+  if (sub === 'status') {
+    console.log('  ' + c.green('✓') + ` internal status ${d?.internalStatus || 'updated'}` + c.dim(d?.versionNumber ? `  ·  v${d.versionNumber}` : ''))
+    if (r.url) console.log('  ' + c.dim('open: ') + r.url)
+    return
+  }
+  if (sub === 'plans') {
+    table((d || []).map(p => ({ id: id8(p.id), name: p.name, client: p.client, status: p.status, shoot: day(p.shootDate || p.shoot?.date), owner: p.owner, submissions: p.submissions, updated: day(p.updatedAt) })))
+    pageLine(r, sub)
+    return
+  }
+  if (sub === 'plan') {
+    printObject(scalars(d, ['shareToken', 'isPublic']))
+    if (r.editable) console.log('\n  ' + c.dim('editable: ' + r.editable.join(', ') + '   e.g.  brello studio plan ' + id8(d?.id) + ' --set status=READY'))
+    if (r.url) console.log('  ' + c.dim('open: ') + r.url)
+    return
+  }
+  if (sub === 'clients') {
+    table((d || []).map(x => ({ id: id8(x.id), name: x.name, ...(x.active !== undefined ? { active: x.active ? 'yes' : 'no', submissions: x.submissions, plans: x.plans, items: x.items } : {}) })))
+    return
+  }
+  if (sub === 'items') {
+    console.log(`\n${c.cyan('❯')} ${c.bold(r.client || '')}${c.dim(`  items · ${r.count ?? 0}${r.catalogCount !== undefined ? ' (' + r.catalogCount + ' in the catalog)' : ''}`)}`)
+    table((d || []).map(x => ({ name: x.name, category: x.category || '', source: x.source || '', catalog: x.inCatalog ? 'yes' : 'plan only' })))
+    return
+  }
+  if (Array.isArray(d)) table(d)
+  else printObject(d)
+}
+async function runStudio(rest) {
+  const p = parseStudioArgs(rest)
+  if (p.error) {
+    if (JSON_OUT) emitError(new Error(p.error))
+    console.error(p.error)
+    process.exit(1)
+  }
+  let r
+  try {
+    r = await withSpinner(`studio · ${p.sub}`, () => runStudioRequest(p))
+  } catch (e) {
+    if (JSON_OUT && !p.csv) emitError(e)
+    console.error('✖ ' + describeError(e))
+    process.exit(1)
+  }
+  if (p.csv) { process.stdout.write(typeof r === 'string' ? r : JSON.stringify(r)); printNotice(); return }
+  if (JSON_OUT) { emit(r); return }
+  if (!['submission', 'comment', 'upload', 'status', 'items'].includes(p.sub)) {
+    console.log(`\n${c.cyan('❯')} ${c.bold('studio ' + p.sub)}${typeof r.count === 'number' ? c.dim(` · ${r.count} result${r.count === 1 ? '' : 's'}`) : ''}`)
+  }
+  studioRender(p.sub, r)
+  if (!['comment', 'upload', 'status'].includes(p.sub)) console.log(c.dim(`\n  ↳ brello help studio  ·  every Studio command\n`))
+  printNotice('\n\n')
+}
+
 function table(rows, ctx) {
   if (!rows || !rows.length) { console.log(emptyLine(ctx)); return }
   if (typeof rows[0] !== 'object') { rows.forEach(r => console.log('  ' + c.cyan('›') + ' ' + r)); return }
@@ -405,7 +523,22 @@ const DETAIL = {
   cards:       { sum: 'Every card in a stage, or matching your filters.', extra: 'Optional argument: a stage name. --board for the whole board, --unassigned for cards with no assignee, --client "<name>" to narrow by client, --history to add each card’s stage history (stage, entered and exited), --created-after / --created-before YYYY-MM-DD for cards made in a date range (Kuwait days). Returns 200 cards a page by default: --limit up to 1000, and --offset N for the next page (the response says which offset is next).  e.g.  brello cards "Ready for Sprint" --board --history   ·   brello cards --board --created-after 2026-10-01 --limit 1000' },
   'stage-stats': { sum: 'How each stage is used over the board’s history.', extra: 'No argument needed. --department "<name>" and --client "<name>" narrow it to matching cards; a family such as Design covers its departments.  e.g.  brello stage-stats --department "Video Edit"' },
   readiness:   { sum: 'Upcoming shoots and what is still missing before the day.', extra: 'Optional: --days N (default 7, up to 31). Lists every shoot in the next N days with what is not settled yet: plan, budget, models, props and call time. A 9:00 AM start counts as missing until someone confirms it. Add --json for the full detail, including each item\'s status and the plan and approval links.  e.g.  brello readiness --days 5' },
-  studio:      { sum: 'The Bricks Studio review feed — what is out for review.', extra: 'Optional argument: filter by submission, card or client name. Shows status, version, comments and client-view receipt. Self-service keys stay with your team and omit share/open URLs, even with --board. e.g. brello studio reel' },
+  studio:      { sum: 'Bricks Studio with the same key: submissions, comments, versions, plans and clients.', extra: [
+    'brello studio [filter] on its own is the Roster review feed: status, version, comments and client views for your team. e.g. brello studio reel',
+    'Bricks Studio commands:',
+    '  brello studio submissions ["<filter>"] [--client "<name>"] [--status <s>] [--type <t>] [--mine] [--limit n] [--offset n]',
+    '  brello studio submission <id>                       versions, files, preview and download links',
+    '  brello studio comments <id> [--csv] [--version n]   --csv prints a spreadsheet, e.g. > comments.csv',
+    '  brello studio comment <id> "<text>" [--at 0:42] [--version n] [--file <fileId>]',
+    '  brello studio upload <id> <file...> [--label "<option label>"] [--option-of <versionId>]',
+    '  brello studio status <id> <approve|changes|clear> [--note "<text>"] [--version-id <id>]',
+    '  brello studio plans ["<filter>"] [--client "<name>"] [--status DRAFT|READY] [--mine] [--limit n]',
+    '  brello studio plan <id> [--set field=value ...]      fields: name, status, shootDate, shootLocation, shootDuration, clientBrief',
+    '  brello studio clients ["<filter>"] [--all]',
+    '  brello studio items <client id or name> ["<filter>"] [--plans]',
+    '  brello studio whoami                                 your Studio account and the Studio permissions on your key',
+    'Ids can be the first 8 characters. Reads work on every key. Comment, upload, status and plan changes need the matching Studio permission on your key, requested on the Connect page (' + CONNECT_URL + '). Comments are team comments and the client never sees them; uploads start hidden from the client; status is the internal review only. Sending to a client, share links, client approval and delete stay in Studio.',
+  ].join('\n  ') },
   scope:       { sum: 'One client in one month: what the contract sold vs what was shot, delivered and approved.', extra: 'Argument: a client name (full or partial), then --month YYYY-MM (default: this month). One block per contract live in that month. CONTRACTED comes from the Salesforce quote, SHOT from completed shoot days, DELIVERED from cards sent to the client or completed, APPROVED from client approvals in Bricks Studio. ? means the number is unknown, and the notes under the table say why. Add --json for the raw response.  e.g.  brello scope "Sedra" --month 2026-10' },
   client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).  e.g.  brello client Foodhall' },
   due:         { sum: 'Cards coming due soon — or set one card’s due date.', extra: 'With a number (or nothing): your team’s cards due in the next N days (default 7).  With a card id/name + a date: sets that card’s due date; pass "clear" to remove it. Moving a missed due date later needs  --reason "<why>"  (REASON_REQUIRED).  e.g.  brello due 3   ·   brello due 1c11685c 2026-07-20 --reason "client moved the shoot"' },
@@ -522,6 +655,19 @@ function help() {
       ['describe', '<card> <text>', 'Set a card’s description'],
       ['archive', '<card>', 'Archive a card (--restore brings it back)'],
     ] },
+    { title: 'Studio', rows: [
+      ['studio submissions', '["<filter>"] [flags]', 'Studio submissions (--client --status --type --mine --limit --offset)'],
+      ['studio submission', '<id>', 'Versions and files with preview and download links'],
+      ['studio comments', '<id> [--csv]', 'Review comments, or a CSV for a spreadsheet (--version)'],
+      ['studio comment', '<id> "<text>"', 'Add a team comment (--at 0:42 --version --file)'],
+      ['studio upload', '<id> <file...>', 'Upload a new version (--label --option-of)'],
+      ['studio status', '<id> <approve|changes|clear>', 'Set the internal review status (--note --version-id)'],
+      ['studio plans', '["<filter>"] [flags]', 'Creative Plans (--client --status --mine --limit)'],
+      ['studio plan', '<id> [--set f=v]', 'Read a plan, or change name, status, shoot date and more'],
+      ['studio clients', '["<filter>"] [--all]', 'Studio clients with submission, plan and item counts'],
+      ['studio items', '<client> ["<filter>"]', "A client's items catalog (--plans adds items from plans)"],
+      ['studio whoami', '', 'Your Studio account and the Studio permissions on your key'],
+    ] },
     { title: 'Admin',            cmds: ['ps-issues', 'audit'] },
   ]
   const groups = SECTIONS.map(s => ({
@@ -562,6 +708,15 @@ if (cmd === 'login') {
   if (process.stdin.isTTY) { const { runAuth } = await import('./lib/auth.mjs'); await runAuth(); process.exit(0) }
   const { runLoginFromStdin } = await import('./lib/auth.mjs')
   await runLoginFromStdin()
+  process.exit(0)
+}
+
+// studio <command> is Bricks Studio; plain  brello studio [filter]  stays the
+// Roster review feed below.
+if (cmd === 'studio' && STUDIO_SUBS.has(rest[0])) {
+  const t = getToken()
+  if (t && isLegacyKey(t)) printLegacyHint(t)
+  await runStudio(rest)
   process.exit(0)
 }
 

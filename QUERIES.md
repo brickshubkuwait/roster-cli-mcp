@@ -142,6 +142,73 @@ created:        Jun 05        last activity: Jun 18
 
 A team key reads a client only when that client has cards on its team. People are never named in this response.
 
+## Studio
+
+Bricks Studio from the same key. Studio answers as your own Studio login. Ids can be the first 8 characters. Add `--json` for Studio's raw response.
+
+```text
+brello studio submissions ["<filter>"] [--client "<name>"] [--status <s>] [--type <t>] [--mine] [--limit n] [--offset n]
+brello studio submission <id>
+brello studio comments <id> [--csv] [--version n]
+brello studio comment <id> "<text>" [--at 0:42] [--version n] [--file <fileId>]
+brello studio upload <id> <file...> [--label "<option label>"] [--option-of <versionId>]
+brello studio status <id> <approve|changes|clear> [--note "<text>"] [--version-id <id>]
+brello studio plans ["<filter>"] [--client "<name>"] [--status DRAFT|READY] [--mine] [--limit n] [--offset n]
+brello studio plan <id> [--set field=value ...]
+brello studio clients ["<filter>"] [--all]
+brello studio items <client id or name> ["<filter>"] [--plans]
+brello studio whoami
+```
+
+- `submissions` lists submissions, newest first, 50 a page (`--limit` up to 200, `--offset` while `next_offset` is set). `--status` takes PENDING, APPROVED or REVISION_REQUESTED for the client status, NONE or CHANGES_REQUESTED for the internal review. Claude uses `studio_submissions`.
+- `submission <id>` returns one submission with every version, its files and signed links: `preview` and `poster` last 12 hours, `download` 1 hour. Claude uses `studio_submission`.
+- `comments <id>` returns the review comments, oldest first; `--csv` prints them as CSV with nothing else on stdout. Claude uses `studio_comments`.
+- `comment <id> "<text>"` adds a team comment, never visible to the client. `--at` takes `0:42`, `1:02:05` or seconds. Claude uses `studio_comment`.
+- `upload <id> <file...>` adds a new version: images go up to 30 files and 60 MB each, videos up to 2 GB, never both in one call. The version starts hidden from the client. Claude uses `studio_upload`.
+- `status <id> <approve|changes|clear>` sets the internal review status only; the client's verdict is never set here. Claude uses `studio_status`.
+- `plans` lists Creative Plans, most recently changed first. Claude uses `studio_plans`.
+- `plan <id>` returns one plan and `editable`, the fields `--set` can change: `name`, `status` (DRAFT or READY), `shootDate`, `shootLocation`, `shootDuration`, `clientBrief`. An empty value clears a text field. Claude uses `studio_plan` to read and `studio_plan_edit` to change.
+- `clients` lists Studio clients, active only unless `--all`. Claude uses `studio_clients`.
+- `items <client>` lists a client's items catalog; `--plans` adds items named on the client's plans. Claude uses `studio_client_items`.
+- `whoami` shows your Studio account, access, and the Studio permissions on your key. Claude uses `studio_whoami`.
+
+Reads work on every key. Comments, uploads, status changes and plan changes need the matching Studio permission on your key (`studio_comment`, `studio_upload`, `studio_status`, `studio_plan`), which you ask for on the Connect page at roster.bricks.com.kw/connect. Sending to a client, share links, client approval and delete stay in Studio. `brello studio` with a filter (`brello studio reel`) is still the Roster review feed.
+
+Submission fields (`submissions`, `submission`):
+
+| Field | What it is |
+|---|---|
+| `id` · `title` · `type` | The submission; type is VIDEO, CAROUSEL, STORY, ARTWORK, HIGHLIGHT, PRESENTATION, PRESET or OTHER |
+| `status` | The client status: PENDING, APPROVED or REVISION_REQUESTED |
+| `internalStatus` | The team's internal review: NONE, APPROVED or CHANGES_REQUESTED |
+| `client` · `clientId` · `owner` | The client and who uploaded it |
+| `versions` · `comments` | Counts in the list; `submission` returns every version |
+| `latest` | The newest version in the list: `number`, `label`, `status`, `internalStatus`, `hiddenFromClient`, `optionLabel` |
+| `versions[].files[]` | `id`, `fileName`, `mimeType`, `fileSize`, `width`, `height`, `preview`, `poster`, `download` |
+| `url` | The submission in Studio |
+
+Comment fields (`comments`; the CSV has the same columns):
+
+| Field | What it is |
+|---|---|
+| `createdAt` | When it was posted |
+| `version` · `versionLabel` | The version it is on |
+| `author` · `type` | Who wrote it, and `team` or `client` |
+| `timecode` · `seconds` | The moment in a video, when pinned |
+| `file` | The file it is on, when pinned to one |
+| `body` · `resolved` | The comment and whether it is resolved |
+
+Plan fields (`plans`):
+
+| Field | What it is |
+|---|---|
+| `id` · `name` · `status` · `kind` | The plan; status is DRAFT or READY |
+| `client` · `clientId` · `owner` | The client and the plan owner |
+| `shootDate` · `shootLocation` · `shootDuration` | The shoot as written on the plan |
+| `shoot` | The linked Roster shoot: `id`, `date` |
+| `submissions` · `childPlans` | Linked submissions and child plans |
+| `url` | The plan in Studio |
+
 ## Limits & pagination
 
 | | |

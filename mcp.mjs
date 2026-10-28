@@ -6,7 +6,8 @@ import { developerGuide } from './lib/docs.mjs'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { callRoster, getToken, isLegacyKey, LEGACY_HINT, describeError, noticeOf } from './lib/client.mjs'
+import { callRoster, getToken, isLegacyKey, LEGACY_HINT, describeError, noticeOf, takeNotice } from './lib/client.mjs'
+import { callStudio, uploadVersion, PLAN_FIELDS } from './lib/studio.mjs'
 import { CHANGELOG, VERSION } from './lib/changelog.mjs'
 
 const server = new McpServer({ name: 'roster-brello', version: VERSION })
@@ -144,6 +145,95 @@ server.tool('roster_assign', 'Assign a card to someone, or unassign it', { card:
 server.tool('roster_rename', 'Rename a card', { card: z.string().describe('card id or exact card name'), name: z.string().describe('the new card title') }, wrap('rename', a => ({ card: a.card, name: a.name })))
 server.tool('roster_describe', 'Set a card’s description', { card: z.string().describe('card id or exact card name'), description: z.string().describe('the new description text') }, wrap('describe', a => ({ card: a.card, description: a.description })))
 server.tool('roster_archive', 'Archive a card, or restore it', { card: z.string().describe('card id or exact card name'), restore: z.boolean().optional().describe('omit/false archives the card; true restores it') }, wrap('archive', a => ({ card: a.card, ...(typeof a.restore === 'boolean' ? { restore: a.restore } : {}) })))
+
+// ── Bricks Studio: the same key, answered as the key owner's own Studio login.
+// Reads work on every key; comment, upload, status and plan changes need the
+// matching Studio permission on the key, requested on the Connect page.
+const STUDIO = 'Bricks Studio (review submissions, Creative Plans, clients), with the same key.'
+const NO_CLIENT = 'Client-facing actions (sending to a client, share links, client approval, delete) are not available here.'
+const enc = (s) => encodeURIComponent(String(s ?? '').trim())
+const studioWrap = (fn) => async (args) => {
+  try {
+    warnIfLegacy()
+    takeNotice()
+    const r = await fn(args || {})
+    const n = takeNotice()
+    if (typeof r === 'string') return { content: [{ type: 'text', text: r + (n ? '\nNotice: ' + n : '') }] }
+    return asText(n && r && typeof r === 'object' && !Array.isArray(r) && !r.notice ? { ...r, notice: n } : r)
+  } catch (e) { return asError(e) }
+}
+const sub = (id) => `/api/agent/submissions/${enc(id)}`
+
+server.tool('studio_whoami', `${STUDIO} Who Studio sees for your key: your Studio account, org, access and view only flag, plus the Studio permissions on the key (studio_comment, studio_upload, studio_status, studio_plan). ${NO_CLIENT}`, {}, studioWrap(() => callStudio('GET', '/api/agent/whoami')))
+server.tool('studio_submissions', `${STUDIO} List submissions (work sent for review), newest first: id, title, type, client status, internal status, client, owner, version and comment counts, the latest version and a Studio link. Pages of 50 by default (limit up to 200); page with offset while next_offset is set. ${NO_CLIENT}`, {
+  q: z.string().optional().describe('text in the title or client name, or the start of an id'),
+  client: z.string().optional().describe('client name (partial OK)'),
+  status: z.enum(['PENDING', 'APPROVED', 'REVISION_REQUESTED', 'NONE', 'CHANGES_REQUESTED']).optional().describe('PENDING, APPROVED or REVISION_REQUESTED filter the client status; NONE or CHANGES_REQUESTED filter the internal review'),
+  type: z.string().optional().describe('submission type, e.g. VIDEO, CAROUSEL, STORY, ARTWORK'),
+  mine: z.boolean().optional().describe('true = only submissions you uploaded'),
+  limit: z.number().int().min(1).max(200).optional().describe('rows per page, default 50, max 200'),
+  offset: z.number().int().min(0).optional().describe('skip this many rows'),
+}, studioWrap(a => callStudio('GET', '/api/agent/submissions', { query: { q: a.q, client: a.client, status: a.status, type: a.type, scope: a.mine ? 'mine' : undefined, limit: a.limit, offset: a.offset } })))
+server.tool('studio_submission', `${STUDIO} One submission in full: client and internal status, plan, shoot, recent activity, and every version with its files and signed preview, poster and download links (preview links last 12 hours, download links 1 hour). ${NO_CLIENT}`, {
+  id: z.string().describe('submission id or its first 8 characters'),
+}, studioWrap(a => callStudio('GET', sub(a.id))))
+server.tool('studio_comments', `${STUDIO} Review comments on a submission, oldest first: createdAt, version, author, type (team or client), timecode, seconds, file, body, resolved. csv true returns the same rows as CSV text for a spreadsheet. ${NO_CLIENT}`, {
+  id: z.string().describe('submission id or its first 8 characters'),
+  csv: z.boolean().optional().describe('true = return CSV text instead of JSON'),
+  version: z.number().int().min(1).optional().describe('only comments on this version number'),
+}, studioWrap(a => callStudio('GET', `${sub(a.id)}/comments`, { query: { format: a.csv ? 'csv' : undefined, version: a.version }, csv: !!a.csv })))
+server.tool('studio_comment', `${STUDIO} Add a team comment to a submission. It is always a team comment and never visible to the client. Pin it to a moment with timecode (0:42, 1:02:05 or seconds), to a version number, or to one file. Needs the studio_comment permission on the key. ${NO_CLIENT}`, {
+  id: z.string().describe('submission id or its first 8 characters'),
+  text: z.string().describe('the comment text'),
+  timecode: z.string().optional().describe('a moment in a video, e.g. 0:42 or 1:02:05'),
+  version: z.number().int().min(1).optional().describe('version number, default the latest'),
+  file_id: z.string().optional().describe('a file id from studio_submission, to comment on one file'),
+}, studioWrap(a => callStudio('POST', `${sub(a.id)}/comments`, { body: { body: a.text, ...(a.timecode ? { timecode: a.timecode } : {}), ...(a.version !== undefined ? { version: a.version } : {}), ...(a.file_id ? { fileId: a.file_id } : {}) } })))
+server.tool('studio_upload', `${STUDIO} Upload a new version of a submission from local files: images (jpg, png, webp, gif, heic, up to 30 and 60 MB each) or videos (mp4, mov, webm, up to 2 GB), not both in one call. The new version starts hidden from the client. option_of adds it as an option of an existing version. Needs the studio_upload permission on the key. ${NO_CLIENT}`, {
+  id: z.string().describe('submission id or its first 8 characters'),
+  files: z.array(z.string()).min(1).max(30).describe('local file paths'),
+  option_label: z.string().optional().describe('label for this option, e.g. "Option B"'),
+  option_of: z.string().optional().describe('version id this upload is an option of'),
+}, studioWrap(a => uploadVersion(a.id, a.files, { optionLabel: a.option_label, parentVersionId: a.option_of })))
+server.tool('studio_status', `${STUDIO} Set the internal review status of a submission: approve, changes (changes requested) or clear. This is the team's internal track only; the client's own verdict is never set here. Needs the studio_status permission on the key. ${NO_CLIENT}`, {
+  id: z.string().describe('submission id or its first 8 characters'),
+  action: z.enum(['approve', 'changes', 'clear']).describe('approve, changes or clear'),
+  note: z.string().optional().describe('a note for the team'),
+  version_id: z.string().optional().describe('a version id, default the latest version'),
+}, studioWrap(a => callStudio('POST', `${sub(a.id)}/status`, { body: { action: a.action, ...(a.note !== undefined ? { note: a.note } : {}), ...(a.version_id ? { versionId: a.version_id } : {}) } })))
+server.tool('studio_plans', `${STUDIO} List Creative Plans, most recently changed first: id, name, status (DRAFT or READY), kind, client, owner, shoot date, location and duration, linked shoot, submission count and a Studio link. ${NO_CLIENT}`, {
+  q: z.string().optional().describe('text in the plan name, location or client name, or the start of an id'),
+  client: z.string().optional().describe('client name (partial OK)'),
+  status: z.enum(['DRAFT', 'READY']).optional().describe('DRAFT or READY'),
+  mine: z.boolean().optional().describe('true = only plans you own'),
+  limit: z.number().int().min(1).max(200).optional().describe('rows per page, default 50, max 200'),
+  offset: z.number().int().min(0).optional().describe('skip this many rows'),
+}, studioWrap(a => callStudio('GET', '/api/agent/plans', { query: { q: a.q, client: a.client, status: a.status, scope: a.mine ? 'mine' : undefined, limit: a.limit, offset: a.offset } })))
+server.tool('studio_plan', `${STUDIO} One Creative Plan in full, with editable (the fields studio_plan_edit can change) and a Studio link. ${NO_CLIENT}`, {
+  id: z.string().describe('plan id or its first 8 characters'),
+}, studioWrap(a => callStudio('GET', `/api/agent/plans/${enc(a.id)}`)))
+server.tool('studio_plan_edit', `${STUDIO} Change a Creative Plan: name, status (DRAFT or READY), shootDate, shootLocation, shootDuration, clientBrief. Pass only the fields to change; an empty string clears a text field. Needs the studio_plan permission on the key. ${NO_CLIENT}`, {
+  id: z.string().describe('plan id or its first 8 characters'),
+  name: z.string().optional().describe('new plan name'),
+  status: z.enum(['DRAFT', 'READY']).optional().describe('DRAFT or READY'),
+  shootDate: z.string().optional().describe('shoot date as text, e.g. 2026-11-02'),
+  shootLocation: z.string().optional().describe('shoot location'),
+  shootDuration: z.string().optional().describe('shoot duration, e.g. 4 hours'),
+  clientBrief: z.string().optional().describe('the client brief'),
+}, studioWrap(a => {
+  const body = Object.fromEntries(PLAN_FIELDS.filter(k => a[k] !== undefined).map(k => [k, a[k]]))
+  if (!Object.keys(body).length) throw new Error(`Pass at least one field to change: ${PLAN_FIELDS.join(', ')}`)
+  return callStudio('PATCH', `/api/agent/plans/${enc(a.id)}`, { body })
+}))
+server.tool('studio_clients', `${STUDIO} Studio clients: id, name, active, business categories and counts of submissions, plans and catalog items. Active clients only unless all is true. ${NO_CLIENT}`, {
+  q: z.string().optional().describe('part of a client name'),
+  all: z.boolean().optional().describe('true = include inactive clients'),
+}, studioWrap(a => callStudio('GET', '/api/agent/clients', { query: { q: a.q, all: a.all ? '1' : undefined } })))
+server.tool('studio_client_items', `${STUDIO} A client's items catalog (products and props) with category, description, photo and source. plans true also lists items named on that client's plans that are not in the catalog yet. ${NO_CLIENT}`, {
+  client: z.string().describe('client id or name'),
+  q: z.string().optional().describe('filter items by text'),
+  plans: z.boolean().optional().describe('true = add items found on the client\'s plans'),
+}, studioWrap(a => callStudio('GET', `/api/agent/clients/${enc(a.client)}/items`, { query: { q: a.q, includePlans: a.plans ? '1' : undefined } })))
 
 warnIfLegacy()
 await server.connect(new StdioServerTransport())
