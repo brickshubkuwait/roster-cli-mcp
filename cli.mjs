@@ -501,9 +501,9 @@ function printObject(o) {
 // of truth keyed by command NAME (aliases resolved below). ──
 const DETAIL = {
   docs: { sum: 'Developer hub, setup guides, commands and troubleshooting.', extra: DOCS_URL },
-  keys: { sum: 'Request, use and renew your Brello key.', extra: KEY_GUIDE.join('\n\n') + '\n\nMy keys: ' + KEYS_URL },
-  auth:        { sum: 'Sign in. Paste your key at a masked prompt; it is checked, then saved to ~/.roster.', extra: `Need a key? Ask at ${CONNECT_URL}. Yousef approves it and you reveal it there. Run this again any time you get a new key.` },
-  login:       { sum: 'Sign in from a pipe, with no prompt.', extra: 'Reads the key from stdin, checks it like brello auth, then saves it.  e.g.  pbpaste | brello login   Passing the key as an argument is not supported, so it never lands in your shell history.' },
+  keys: { sum: 'Sign in, use and renew your Brello key.', extra: KEY_GUIDE.join('\n\n') + '\n\nMy keys: ' + KEYS_URL },
+  auth:        { sum: 'Sign in. Press Enter, sign in with your Bricks Google account, Yousef approves, your terminal is connected.', extra: `Need a key? Run brello auth and sign in with your Bricks Google account. The browser opens ${CONNECT_URL}; once Yousef approves, this terminal saves the key to ~/.roster by itself. Closed the terminal? Run brello auth again within 24 hours of the approval. Have a key from Yousef? Type it at the same prompt.` },
+  login:       { sum: 'Sign in from a pipe with a key Yousef gave you, with no prompt.', extra: 'Reads the key from stdin, checks it, then saves it.  e.g.  pbpaste | brello login   Passing the key as an argument is not supported, so it never lands in your shell history. Everyone else runs brello auth.' },
   stats:       { sum: 'A live dashboard for your whole team in one glance.', extra: 'No argument. Shows team size, open / done / overdue counts, what is due this week, cards with no due date, and how many people are tracking time right now.' },
   team:        { sum: 'Your team members — names, departments and roles.', extra: 'No argument. A ● now marker means that person has a live Hubstaff timer.' },
   overdue:     { sum: 'Cards that are past their due date and not yet done.', extra: 'No argument. Sorted oldest-first; the LATE column shows how many days each one has slipped.' },
@@ -634,8 +634,8 @@ function help() {
     { title: 'Get started', rows: [
       ['docs', '', 'Developer hub, setup and command reference'],
       ['help keys', '', 'Key permissions, limits, renewal and recovery'],
-      ['auth', '', 'Sign in with your key from ' + CONNECT_URL],
-      ['login', '< key', 'Sign in from a pipe, e.g.  pbpaste | brello login'],
+      ['auth', '', 'Sign in with your Bricks Google account'],
+      ['login', '< key', 'Sign in from a pipe with a key Yousef gave you'],
       ['whoami', '', 'Check whether a key is set'],
       ['logout', '', 'Remove your saved key'],
       ['changelog', '', "What's new — every release"],
@@ -702,7 +702,7 @@ if (rest.includes('--help') || rest.includes('-h')) { helpFor(cmd); process.exit
 if (cmd === 'login') {
   if (rest.some(a => !a.startsWith('--'))) {
     console.error(c.red('✖') + ' brello login no longer takes the key as an argument, so it stays out of your shell history.')
-    console.error('  run  ' + c.cyan('brello auth') + '  (masked prompt)  or  ' + c.cyan('pbpaste | brello login'))
+    console.error('  run  ' + c.cyan('brello auth') + '  (sign in with Google)  or  ' + c.cyan('pbpaste | brello login'))
     process.exit(1)
   }
   if (process.stdin.isTTY) { const { runAuth } = await import('./lib/auth.mjs'); await runAuth(); process.exit(0) }

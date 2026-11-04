@@ -18,11 +18,11 @@ brello auth
 brello stats
 ```
 
-`brello auth` asks for your key at a masked prompt, checks it, and saves it to
-`~/.roster` (only your user can read it), until you renew or replace the key. Run `brello auth` again with the replacement.
+`brello auth`: press Enter and your browser opens [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect). Sign in with your Bricks Google account and ask Yousef. Once he approves, your terminal is connected and the key is saved to `~/.roster` (only your user can read it).
 
-> Need a key? Ask at [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect). Yousef approves it and you reveal it there.
-> Already copied it? `pbpaste | brello login` signs in straight from the clipboard.
+> Need a key? Run `brello auth` and sign in with your Bricks Google account.
+> Closed the terminal before the approval? Run `brello auth` again within 24 hours of it.
+> Have a key from Yousef? Type it at the `brello auth` prompt, or `pbpaste | brello login`.
 > The command is `brello` (typing `roster` works too).
 
 <details><summary>Install from source instead</summary>
@@ -110,7 +110,7 @@ Bricks Studio works from the same key: submissions, review comments, versions, C
 | `brello studio items <client id or name> ["<filter>"]` | A client's items catalog; `--plans` adds items named on the client's plans |
 | `brello studio whoami` | Your Studio account and the Studio permissions on your key |
 
-Reads work on every key. Comments, uploads, status changes and plan changes need the matching Studio permission on your key (post team comments, upload a new version, change the internal status, edit plans), which you ask for on the [Connect page](https://roster.bricks.com.kw/connect). Sending to a client, share links, client approval and delete stay in Studio.
+Reads work on every key. Comments, uploads, status changes and plan changes need the matching Studio permission on your key (post team comments, upload a new version, change the internal status, edit plans), which Yousef grants when he approves your `brello auth` sign in. Sending to a client, share links, client approval and delete stay in Studio.
 
 `brello studio` with a filter (for example `brello studio reel`) is still the Roster review feed.
 
@@ -156,10 +156,10 @@ claude mcp add brello -- brello-mcp
 
 ## Keys
 
-- Anyone on the Bricks team can ask for a key at [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect). Yousef approves it and picks your team or the whole board, for up to 90 days. An approval can be claimed for 24 hours, with a sign-in within the last 10 minutes. The key is shown once.
-- Renew in My keys when eligible. Revealing the renewal replaces and revokes the old key. Run `brello auth` on each device using it.
+- Anyone on the Bricks team can run `brello auth` and sign in with their Bricks Google account. Yousef approves and picks your team or the whole board, for up to 90 days. Your terminal is connected by itself; nobody sees the key.
+- Renew in [My keys](https://roster.bricks.com.kw/connect) when eligible, then run `brello auth`. Connecting a new terminal revokes the old key.
 - `brello logout` only removes the local copy. Revoke a lost key in My keys.
-- Keys come from [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect). Renew or replace them there.
+- See, renew and revoke your keys at [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect).
 - If a key expires, is paused, or hits the rate limit, brello tells you why and what to do next.
 - When the server has a heads up for you (for example, your key expires in a few days), the CLI prints it after your results and Claude sees it as a final `Notice:` line.
-- Old style keys are retired. If you still have one, get a new key at the link above and run `brello auth`.
+- Old style keys are retired. If you still have one, run `brello auth` and sign in with Google.
