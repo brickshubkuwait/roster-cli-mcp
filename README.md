@@ -158,7 +158,7 @@ claude mcp add brello -- brello-mcp
 ## Keys
 
 - Anyone on the Bricks team can run `brello auth` and sign in with their Bricks Google account. An admin approves and picks your team or the whole board, the actions and the length, up to 90 days. Approved once: after that `brello auth` reconnects on its own until an admin revokes the key. Your terminal is connected by itself; nobody sees the key.
-- Renew in [My keys](https://roster.bricks.com.kw/connect) when eligible, then run `brello auth`. Connecting a new terminal revokes the old key.
+- When a key runs out or has under 7 days left, run `brello auth` and it renews with the same access. Renew in [My keys](https://roster.bricks.com.kw/connect) works too. Connecting a new terminal revokes the old key.
 - `brello logout` only removes the local copy. Revoke a lost key in My keys.
 - See, renew and revoke your keys at [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect).
 - If a key expires, is paused, or hits the rate limit, brello tells you why and what to do next.

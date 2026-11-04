@@ -53,7 +53,7 @@ Add `--json` to any command for machine output: the raw JSON response on stdout,
 
 `brello meetings [--from YYYY-MM-DD --to YYYY-MM-DD] [--client "<name>"] [--owner "<name>"] [--board]`
 
-Without dates: 7 days back to 60 days ahead. Shows meetings your team organises or attends; `--board` shows every meeting for administrator-issued keys. Claude uses `roster_meetings`.
+Without dates: 7 days back to 60 days ahead. Shows meetings your team organises or attends; `--board` shows every meeting when your key has the whole board. Claude uses `roster_meetings`.
 
 | Field | What it is |
 |---|---|
@@ -172,7 +172,7 @@ brello studio whoami
 - `items <client>` lists a client's items catalog; `--plans` adds items named on the client's plans. Claude uses `studio_client_items`.
 - `whoami` shows your Studio account, access, and the Studio permissions on your key. Claude uses `studio_whoami`.
 
-Reads work on every key. Comments, uploads, status changes and plan changes need the matching Studio permission on your key (`studio_comment`, `studio_upload`, `studio_status`, `studio_plan`), which you ask for on the Connect page at roster.bricks.com.kw/connect. Sending to a client, share links, client approval and delete stay in Studio. `brello studio` with a filter (`brello studio reel`) is still the Roster review feed.
+Reads work on every key. Comments, uploads, status changes and plan changes need the matching Studio permission on your key (`studio_comment`, `studio_upload`, `studio_status`, `studio_plan`), which an admin grants when approving your `brello auth` request. Sending to a client, share links, client approval and delete stay in Studio. `brello studio` with a filter (`brello studio reel`) is still the Roster review feed.
 
 Submission fields (`submissions`, `submission`):
 

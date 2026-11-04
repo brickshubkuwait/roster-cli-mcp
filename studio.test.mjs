@@ -177,7 +177,7 @@ test('Studio refusals explain themselves', async () => {
     const out = JSON.parse(r.stdout)
     assert.equal(out.code, 'capability_required')
     assert.match(out.error, /Studio: post team comments/)
-    assert.match(out.error, /roster\.bricks\.com\.kw\/connect/)
+    assert.match(out.error, /Ask an admin/)
     const n = await run(base, 'studio', 'plans')
     assert.equal(n.code, 1)
     assert.match(n.stderr, /Your key's Slack identity has no Studio account/)
@@ -284,7 +284,7 @@ test('release bookkeeping and copy rules', () => {
 test('brello help studio lists every Studio command', async () => {
   const r = await run('http://127.0.0.1:1', 'help', 'studio')
   assert.equal(r.code, 0, r.stderr)
-  for (const s of ['studio submissions', 'studio submission <id>', 'studio comments <id> [--csv]', 'studio comment <id>', 'studio upload <id>', 'studio status <id>', 'studio plans', 'studio plan <id>', 'studio clients', 'studio items', 'studio whoami', 'Connect page']) assert.ok(r.stdout.includes(s), s)
+  for (const s of ['studio submissions', 'studio submission <id>', 'studio comments <id> [--csv]', 'studio comment <id>', 'studio upload <id>', 'studio status <id>', 'studio plans', 'studio plan <id>', 'studio clients', 'studio items', 'studio whoami', 'granted by an admin']) assert.ok(r.stdout.includes(s), s)
   const h = await run('http://127.0.0.1:1', 'help')
   assert.match(h.stdout, /\nStudio\n/)
   assert.match(h.stdout, /studio upload <id> <file\.\.\.>/)

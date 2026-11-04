@@ -347,7 +347,7 @@ function studioRender(sub, r) {
   const d = r.data
   if (sub === 'whoami') {
     const u = r.user || {}, k = r.key || {}
-    printObject({ name: u.name, email: u.email, org: u.orgSlug, role: u.orgRole, access: u.access, view_only: u.readOnly ? 'yes' : 'no', key: k.label, expires: k.expiresAt, studio_permissions: (k.studio || []).length ? k.studio.join(', ') : 'none yet, ask on the Connect page' })
+    printObject({ name: u.name, email: u.email, org: u.orgSlug, role: u.orgRole, access: u.access, view_only: u.readOnly ? 'yes' : 'no', key: k.label, expires: k.expiresAt, studio_permissions: (k.studio || []).length ? k.studio.join(', ') : 'none yet, ask an admin' })
     return
   }
   if (sub === 'submissions') {
@@ -537,7 +537,7 @@ const DETAIL = {
     '  brello studio clients ["<filter>"] [--all]',
     '  brello studio items <client id or name> ["<filter>"] [--plans]',
     '  brello studio whoami                                 your Studio account and the Studio permissions on your key',
-    'Ids can be the first 8 characters. Reads work on every key. Comment, upload, status and plan changes need the matching Studio permission on your key, requested on the Connect page (' + CONNECT_URL + '). Comments are team comments and the client never sees them; uploads start hidden from the client; status is the internal review only. Sending to a client, share links, client approval and delete stay in Studio.',
+    'Ids can be the first 8 characters. Reads work on every key. Comment, upload, status and plan changes need the matching Studio permission on your key, granted by an admin when approving your brello auth request. Comments are team comments and the client never sees them; uploads start hidden from the client; status is the internal review only. Sending to a client, share links, client approval and delete stay in Studio.',
   ].join('\n  ') },
   scope:       { sum: 'One client in one month: what the contract sold vs what was shot, delivered and approved.', extra: 'Argument: a client name (full or partial), then --month YYYY-MM (default: this month). One block per contract live in that month. CONTRACTED comes from the Salesforce quote, SHOT from completed shoot days, DELIVERED from cards sent to the client or completed, APPROVED from client approvals in Bricks Studio. ? means the number is unknown, and the notes under the table say why. Add --json for the raw response.  e.g.  brello scope "Sedra" --month 2026-10' },
   client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).  e.g.  brello client Foodhall' },
