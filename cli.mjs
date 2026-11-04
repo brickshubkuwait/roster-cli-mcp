@@ -502,7 +502,7 @@ function printObject(o) {
 const DETAIL = {
   docs: { sum: 'Developer hub, setup guides, commands and troubleshooting.', extra: DOCS_URL },
   keys: { sum: 'Request, use and renew your Brello key.', extra: KEY_GUIDE.join('\n\n') + '\n\nMy keys: ' + KEYS_URL },
-  auth:        { sum: 'Sign in. Paste your key at a masked prompt; it is checked, then saved to ~/.roster.', extra: `Keys come from ${CONNECT_URL} (by invitation). Run this again any time you get a new key.` },
+  auth:        { sum: 'Sign in. Paste your key at a masked prompt; it is checked, then saved to ~/.roster.', extra: `Need a key? Ask at ${CONNECT_URL}. Yousef approves it and you reveal it there. Run this again any time you get a new key.` },
   login:       { sum: 'Sign in from a pipe, with no prompt.', extra: 'Reads the key from stdin, checks it like brello auth, then saves it.  e.g.  pbpaste | brello login   Passing the key as an argument is not supported, so it never lands in your shell history.' },
   stats:       { sum: 'A live dashboard for your whole team in one glance.', extra: 'No argument. Shows team size, open / done / overdue counts, what is due this week, cards with no due date, and how many people are tracking time right now.' },
   team:        { sum: 'Your team members — names, departments and roles.', extra: 'No argument. A ● now marker means that person has a live Hubstaff timer.' },
@@ -688,7 +688,7 @@ function help() {
     console.log('')
   }
   console.log(`${D}  docs: ${DOCS_URL}${R}`)
-  console.log(`${D}  self-service keys: your team, approved actions, 60/min + 5,000/day. Run brello help keys.${R}`)
+  console.log(`${D}  keys: your team or the whole board, approved actions, 60/min + 5,000/day. Run brello help keys.${R}`)
   console.log(`${D}  examples:  brello user Samer   ·   brello studio reel   ·   brello card 1c11685c${R}`)
   console.log(`${D}  scripts:   add --json to any command for raw JSON (no banner, no colour)${R}`)
   console.log(`${D}  new here?  run  ${R}${C}brello auth${R}${D}  first, then  ${R}${C}brello stats${R}\n`)

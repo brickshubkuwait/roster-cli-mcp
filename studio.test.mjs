@@ -262,7 +262,7 @@ test('release bookkeeping and copy rules', () => {
   const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
   assert.equal(CHANGELOG[0].version, pkg.version)
   assert.equal(VERSION, pkg.version)
-  assert.equal(CHANGELOG[0].version, '1.14.0')
+  assert.ok(CHANGELOG.some(e => e.version === '1.14.0'))
   const banned = /[–—]|read-only|scoped|audited/i
   assert.doesNotMatch(JSON.stringify(CHANGELOG[0]), banned)
   const section = (file, from, to) => { const s = readFileSync(new URL(file, import.meta.url), 'utf8'); const a = s.indexOf(from); assert.ok(a >= 0, `${file} has ${from}`); return s.slice(a, s.indexOf(to, a + 1)) }

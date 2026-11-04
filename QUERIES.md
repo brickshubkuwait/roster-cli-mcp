@@ -26,7 +26,7 @@ What each command returns.
 | `clients ["<name>"]` | The client directory. See [Clients](#clients). |
 | `readiness` | Shoots in the next `days` (default 7, up to 31) with what is still missing: plan, budget, models, props, call time. |
 
-CLI and MCP share the same per-key budget. Self-service keys see your team’s cards even when `--board` is supplied. Write actions need approval, assignments stay within your team, and archive is unavailable. Self-service responses omit share/open URLs, invoice details and delivery recipients.
+CLI and MCP share the same per-key budget. Keys see your team’s cards, or the whole board when the key has it. Write actions need approval, assignments stay within your team, and archive is unavailable. Self-service responses omit share/open URLs, invoice details and delivery recipients.
 
 Add `--json` to any command for machine output: the raw JSON response on stdout, with no banner and no colour. Errors print as `{"ok": false, "error": "...", "code": ..., "status": ...}` with exit code 1.
 
