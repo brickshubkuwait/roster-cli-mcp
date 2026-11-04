@@ -18,11 +18,12 @@ brello auth
 brello stats
 ```
 
-`brello auth`: press Enter and your browser opens [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect). Sign in with your Bricks Google account and ask Yousef. Once he approves, your terminal is connected and the key is saved to `~/.roster` (only your user can read it).
+`brello auth`: press Enter and your browser opens [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect). Sign in with your Bricks Google account and request access. An admin approves it and picks what your terminal can do. Once approved, your terminal is connected and the key is saved to `~/.roster` (only your user can read it).
 
 > Need a key? Run `brello auth` and sign in with your Bricks Google account.
 > Closed the terminal before the approval? Run `brello auth` again within 24 hours of it.
-> Have a key from Yousef? Type it at the `brello auth` prompt, or `pbpaste | brello login`.
+> Approved once. After that your terminal reconnects on its own.
+> Have a key from an admin? Type it at the `brello auth` prompt, or `pbpaste | brello login`.
 > The command is `brello` (typing `roster` works too).
 
 <details><summary>Install from source instead</summary>
@@ -110,7 +111,7 @@ Bricks Studio works from the same key: submissions, review comments, versions, C
 | `brello studio items <client id or name> ["<filter>"]` | A client's items catalog; `--plans` adds items named on the client's plans |
 | `brello studio whoami` | Your Studio account and the Studio permissions on your key |
 
-Reads work on every key. Comments, uploads, status changes and plan changes need the matching Studio permission on your key (post team comments, upload a new version, change the internal status, edit plans), which Yousef grants when he approves your `brello auth` sign in. Sending to a client, share links, client approval and delete stay in Studio.
+Reads work on every key. Comments, uploads, status changes and plan changes need the matching Studio permission on your key (post team comments, upload a new version, change the internal status, edit plans), which an admin grants when approving your `brello auth` request. Sending to a client, share links, client approval and delete stay in Studio.
 
 `brello studio` with a filter (for example `brello studio reel`) is still the Roster review feed.
 
@@ -156,7 +157,7 @@ claude mcp add brello -- brello-mcp
 
 ## Keys
 
-- Anyone on the Bricks team can run `brello auth` and sign in with their Bricks Google account. Yousef approves and picks your team or the whole board, for up to 90 days. Your terminal is connected by itself; nobody sees the key.
+- Anyone on the Bricks team can run `brello auth` and sign in with their Bricks Google account. An admin approves and picks your team or the whole board, the actions and the length, up to 90 days. Approved once: after that `brello auth` reconnects on its own until an admin revokes the key. Your terminal is connected by itself; nobody sees the key.
 - Renew in [My keys](https://roster.bricks.com.kw/connect) when eligible, then run `brello auth`. Connecting a new terminal revokes the old key.
 - `brello logout` only removes the local copy. Revoke a lost key in My keys.
 - See, renew and revoke your keys at [roster.bricks.com.kw/connect](https://roster.bricks.com.kw/connect).

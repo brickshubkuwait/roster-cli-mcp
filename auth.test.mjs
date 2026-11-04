@@ -78,3 +78,12 @@ test('help and copy: Google sign in, no reveal or paste for the normal path, no 
     assert.doesNotMatch(t, /reveal|paste at|read-only|scoped|audited|[–—]/i)
   }
 })
+
+test('1.15.1 copy: an admin, never a name, and approved once', () => {
+  const run = (...args) => spawnSync(process.execPath, ['cli.mjs', ...args], { cwd: new URL('.', import.meta.url), encoding: 'utf8', env: { ...process.env, ROSTER_URL: 'http://127.0.0.1:1', BRELLO_TOKEN: 'not-a-key' } }).stdout
+  const text = [run('help'), run('help', 'auth'), run('help', 'keys'), run('help', 'login')].join('\n')
+  assert.doesNotMatch(text, /Yousef/)
+  assert.match(text, /a key from an admin/)
+  assert.match(run('help', 'keys'), /Approved once\. After that your terminal reconnects on its own/)
+  assert.equal(STOP_TEXT.denied, 'Your access request was not approved.')
+})
