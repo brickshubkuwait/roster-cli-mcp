@@ -11,9 +11,10 @@ What each command returns.
 | `overdue` | Cards past their due date and not done — card, client, assignee, due date. |
 | `workload` | Open + overdue card counts per person, so you can see who's buried. |
 | `active` | Who is tracking time right now, and on which card (live Hubstaff). |
-| `comments` | Recent comments on your team's cards — card, author, comment, date. |
+| `comments` | Recent comments on your team's cards — card, author, comment, date. `--limit` takes up to 200. |
 | `reactions` | Recent emoji reactions on your team's cards — card, who, emoji, date. |
-| `activity` | Card history — who moved a card (stage→stage), commented, split, reassigned, or edited it, and when. |
+| `activity` | Card history — who moved a card (stage→stage), commented, split, reassigned, or edited it, and when. `--limit` takes up to 300 events. |
+| `card-activity <id>` | ONE card's comments and its activity trail merged into one feed, newest first: `at`, `type` (`comment`, `comment_logged` or `activity`), `by`, `what`, plus the card it belongs to. `--include comments` or `--include activity` keeps one kind; `--limit` takes up to 400 (default 80). |
 | `search "<text>"` | Cards whose title or client matches the text. |
 | `card <id>` | Full card detail — description, stage, priority, assignee, collaborators, subtasks, split task, linked cards, due. |
 | `scope "<client>" --month YYYY-MM` | One client in one month, one block per contract live in that month: contracted (Salesforce quote), shot (completed shoot days and their outputs), delivered (cards sent to the client or completed) and approved (client approvals in Bricks Studio), by type: sessions, photos, videos, reels, stories, artworks, animations. Special requests come with what was asked for, never an amount. Unknown numbers print `?` (`null` in `--json`) with a note. See [Scope](#scope). |
@@ -25,6 +26,8 @@ What each command returns.
 | `meetings` | Meetings with owner, attendees and minutes status. See [Meetings](#meetings). |
 | `clients ["<name>"]` | The client directory. See [Clients](#clients). |
 | `readiness` | Shoots in the next `days` (default 7, up to 31) with what is still missing: plan, budget, models, props, call time. |
+
+`--department "<name>"` narrows a read to one department (`Video Edit`) or a whole family (`Video Post Production` = Video Edit + Reel Video Edit + Motion). It works on `stats`, `workload`, `overdue`, `comments`, `activity`, `card-activity`, `search`, `cards`, `stages`, `due`, `done`, `blocked`, `recent`, `now`, `client`, `clients`, `studio` and `stage-stats`. An unknown name comes back with the list of names the roster knows.
 
 CLI and MCP share the same per-key budget. Keys see your team’s cards, or the whole board when the key has it. Write actions need approval, assignments stay within your team, and archive is unavailable. Self-service responses omit share/open URLs, invoice details and delivery recipients.
 
@@ -154,7 +157,8 @@ brello studio comment <id> "<text>" [--at 0:42] [--version n] [--file <fileId>]
 brello studio upload <id> <file...> [--label "<option label>"] [--option-of <versionId>]
 brello studio status <id> <approve|changes|clear> [--note "<text>"] [--version-id <id>]
 brello studio plans ["<filter>"] [--client "<name>"] [--status DRAFT|READY] [--mine] [--limit n] [--offset n]
-brello studio plan <id> [--set field=value ...]
+brello studio plan <id> [--include activity,history|all|none] [--limit n]
+brello studio plan <id> --set field=value ...
 brello studio clients ["<filter>"] [--all]
 brello studio items <client id or name> ["<filter>"] [--plans]
 brello studio whoami
@@ -167,6 +171,7 @@ brello studio whoami
 - `upload <id> <file...>` adds a new version: images go up to 30 files and 60 MB each, videos up to 2 GB, never both in one call. The version starts hidden from the client. Claude uses `studio_upload`.
 - `status <id> <approve|changes|clear>` sets the internal review status only; the client's verdict is never set here. Claude uses `studio_status`.
 - `plans` lists Creative Plans, most recently changed first. Claude uses `studio_plans`.
+- `plan <id>` leaves the edit trail and the version history out by default: the response names them in `omitted` with `activityCount` and `historyCount` and says how to ask. `--include activity,history` (or `--include all`) adds them, and `--limit n` sets how many rows each one returns instead of the newest 100. `--include` and `--limit` read a plan; they do not go with `--set`.
 - `plan <id>` returns one plan and `editable`, the fields `--set` can change: `name`, `status` (DRAFT or READY), `shootDate`, `shootLocation`, `shootDuration`, `clientBrief`. An empty value clears a text field. Claude uses `studio_plan` to read and `studio_plan_edit` to change.
 - `clients` lists Studio clients, active only unless `--all`. Claude uses `studio_clients`.
 - `items <client>` lists a client's items catalog; `--plans` adds items named on the client's plans. Claude uses `studio_client_items`.

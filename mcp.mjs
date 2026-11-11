@@ -22,6 +22,15 @@ function warnIfLegacy() {
   if (t && isLegacyKey(t)) { legacyWarned = true; log(LEGACY_HINT) }
 }
 
+// ── shared read filters ──────────────────────────────────────────────────────
+// department: one department, or a whole family. scope: your team or the whole
+// board. The gateway resolves both and names what it counted in every response.
+const DEPT = z.string().optional().describe('narrow to one department ("Video Edit") or a whole family ("Video Post Production" = Video Edit + Reel Video Edit + Motion)')
+const SCOPE = z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards")
+const DEPT_NOTE = ' Pass department to narrow it to one department or a whole family.'
+// department/scope/limit, only the ones that were given.
+const reads = (a = {}) => ({ ...(a.department ? { department: a.department } : {}), ...(a.scope ? { scope: a.scope } : {}), ...(a.limit ? { limit: a.limit } : {}) })
+
 function asText(r) {
   const notice = noticeOf(r)
   let body = r
@@ -35,35 +44,43 @@ const wrap = (query, mapParams = () => ({})) => async (args) => {
   catch (e) { return asError(e) }
 }
 
-server.tool('roster_stats', 'Dashboard totals: open/done/overdue cards and who is tracking now. Default scope "team" = your team\'s cards (reports team_size) — pass scope "board" for whole-board totals (reports people_with_cards + unassigned_cards instead).', { scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('stats', a => (a.scope ? { scope: a.scope } : {})))
+server.tool('roster_stats', 'Dashboard totals: open/done/overdue cards and who is tracking now. Default scope "team" = your team\'s cards (reports team_size) — pass scope "board" for whole-board totals (reports people_with_cards + unassigned_cards instead).' + DEPT_NOTE, { department: DEPT, scope: SCOPE }, wrap('stats', reads))
 server.tool('roster_team', 'Company-wide directory of ALL active team members (names, departments, roles) — NOT card-scoped, so its count is bigger than your team. Card tools default to your team; the response\'s your_team/your_team_size fields say who that is.', {}, wrap('team'))
-server.tool('roster_comments', 'Recent comments on your team’s cards (team scope only)', {}, wrap('comments'))
-server.tool('roster_overdue', 'Overdue cards (past due, not done). Default scope "team" = your team\'s cards only — pass scope "board" for every overdue card on the board.', { scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('overdue', a => (a.scope ? { scope: a.scope } : {})))
-server.tool('roster_workload', 'Open + overdue card counts per person. Default scope "team" = your team only — pass scope "board" for everyone on the board (includes an Unassigned row).', { scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('workload', a => (a.scope ? { scope: a.scope } : {})))
+server.tool('roster_comments', 'Recent comments on your team’s cards. Default scope "team" — pass scope "board" for the whole board. People you cannot see are taken out BEFORE the limit is applied, so a page is never emptied by them.' + DEPT_NOTE, { department: DEPT, scope: SCOPE, limit: z.number().int().min(1).max(200).optional().describe('how many comments, default 40, max 200') }, wrap('comments', reads))
+server.tool('roster_overdue', 'Overdue cards (past due, not done). Default scope "team" = your team\'s cards only — pass scope "board" for every overdue card on the board.' + DEPT_NOTE, { department: DEPT, scope: SCOPE }, wrap('overdue', reads))
+server.tool('roster_workload', 'Open + overdue card counts per person. Default scope "team" = your team only — pass scope "board" for everyone on the board (includes an Unassigned row). Someone who has left Bricks reads as their name marked (former), never a raw Slack id.' + DEPT_NOTE, { department: DEPT, scope: SCOPE }, wrap('workload', reads))
 server.tool('roster_active', 'Who is actively tracking time right now (live Hubstaff timers)', {}, wrap('active'))
 server.tool('roster_reactions', 'Recent emoji reactions on your team’s cards', {}, wrap('reactions'))
-server.tool('roster_activity', 'Recent activity on your team’s cards — moves (stage→stage), comments, assignments, splits, edits', {}, wrap('activity'))
-server.tool('roster_search', 'Search cards by title or client name. Default scope "team" searches ONLY cards assigned to your team — pass scope "board" to search the entire board.', { q: z.string().describe('text to search for'), scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('search', a => ({ q: a.q, ...(a.scope ? { scope: a.scope } : {}) })))
+server.tool('roster_activity', 'Everything that happened on the in-scope cards — moves (stage→stage), comments, assignments, splits, edits — newest first. Default scope "team" — pass scope "board" for the whole board.' + DEPT_NOTE, { department: DEPT, scope: SCOPE, limit: z.number().int().min(1).max(300).optional().describe('how many events, default 60, max 300') }, wrap('activity', reads))
+server.tool('roster_card_activity', 'ONE card’s comments and activity trail merged into a single feed, newest first — the full conversation and history of that card. Use it after roster_card to see what was said and what changed. Rows: at, type ("comment", "comment_logged" or "activity"), by, what. The response also names the card (id, title, client, stage, assignee).', {
+  id: z.string().describe('card id or its first 8 characters'),
+  include: z.enum(['comments', 'activity']).optional().describe('keep only one kind; omit for both'),
+  limit: z.number().int().min(1).max(400).optional().describe('how many rows, default 80, max 400'),
+  scope: SCOPE,
+}, wrap('card_activity', a => ({ id: a.id, ...(a.include ? { include: a.include } : {}), ...(a.limit ? { limit: a.limit } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
+server.tool('roster_search', 'Search cards by title or client name. Default scope "team" searches ONLY cards assigned to your team — pass scope "board" to search the entire board.', { q: z.string().describe('text to search for'), department: DEPT, scope: SCOPE }, wrap('search', a => ({ q: a.q, ...reads(a) })))
 server.tool('roster_user_cards', 'Everything for one person — their whole card history (live AND archived) plus a dossier: role, department, open/done/archived totals, and what they are tracking right now', { who: z.string().describe('a person\'s name (full or partial)') }, wrap('user', a => ({ who: a.who })))
 server.tool('roster_card', 'Full card detail — brief, stage, people, subtasks, linked cards, stage history, tracked effort, Salesforce opportunity/invoice, Bricks Studio submissions, client send/view receipt, Slack thread, deliverable sizes, approved EN/AR copy, and request outcome.', { id: z.string().describe('card id or its first 8 characters') }, wrap('card', a => ({ id: a.id })))
-server.tool('roster_stages', 'Board stages (lists) with open card counts. Default scope "team" counts ONLY cards assigned to your team — pass scope "board" for true board totals.', { scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards") }, wrap('stages', a => (a.scope ? { scope: a.scope } : {})))
+server.tool('roster_stages', 'Board stages (lists) with open card counts. Default scope "team" counts ONLY cards assigned to your team — pass scope "board" for true board totals.' + DEPT_NOTE, { department: DEPT, scope: SCOPE }, wrap('stages', reads))
 server.tool('roster_cards', 'List EVERY card matching the filters — the stage/board enumerator. Filters: stage (list name), assignee (name, or "none" for unassigned), client, done. Default scope "team" = only your team\'s cards; scope "board" = the whole board including unassigned. Every row carries stage_entered_at + time_in_stage_hours + age (how long it has sat in its current stage — sort by this to find what\'s rotting; dwell_basis "created_at" marks floors). Every response carries a "filter" field stating exactly what was counted. Pages of 200 by default (limit up to 1000); count is the full total and next_offset is set while more remain, so page with offset until next_offset is null.', {
   stage: z.string().optional().describe('list name, e.g. "Ready for Sprint" (case-insensitive)'),
   assignee: z.string().optional().describe('person name, or "none"/"unassigned" for cards with no assignee'),
   client: z.string().optional().describe('client name (partial OK)'),
   done: z.boolean().optional().describe('true = completed only, false = open only, omit = both'),
-  scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards"),
+  scope: SCOPE,
+  department: DEPT,
   history: z.boolean().optional().describe('true adds history: [{stage, entered_at, exited_at}] per card, oldest first (exited_at null = still there)'),
   created_after: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD: only cards created on or after this Kuwait day, e.g. to pull just new cards'),
   created_before: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD: only cards created on or before this Kuwait day'),
   limit: z.number().int().min(1).max(1000).optional().describe('cards per page, default 200, max 1000'),
   offset: z.number().int().min(0).optional().describe('skip this many cards; the response carries next_offset while more remain'),
-}, wrap('cards', a => ({ ...(a.stage ? { stage: a.stage } : {}), ...(a.assignee ? { assignee: a.assignee } : {}), ...(a.client ? { client: a.client } : {}), ...(typeof a.done === 'boolean' ? { done: a.done } : {}), ...(a.scope ? { scope: a.scope } : {}), ...(a.history ? { history: true } : {}), ...(a.created_after ? { created_after: a.created_after } : {}), ...(a.created_before ? { created_before: a.created_before } : {}), ...(a.limit ? { limit: a.limit } : {}), ...(typeof a.offset === 'number' ? { offset: a.offset } : {}) })))
+}, wrap('cards', a => ({ ...(a.stage ? { stage: a.stage } : {}), ...(a.assignee ? { assignee: a.assignee } : {}), ...(a.client ? { client: a.client } : {}), ...(typeof a.done === 'boolean' ? { done: a.done } : {}), ...(a.scope ? { scope: a.scope } : {}), ...(a.department ? { department: a.department } : {}), ...(a.history ? { history: true } : {}), ...(a.created_after ? { created_after: a.created_after } : {}), ...(a.created_before ? { created_before: a.created_before } : {}), ...(a.limit ? { limit: a.limit } : {}), ...(typeof a.offset === 'number' ? { offset: a.offset } : {}) })))
 server.tool('roster_stage_cards', 'Every card currently in ONE stage (list) — e.g. roster_stage_cards("Ready for Sprint", scope "board"). Same engine as roster_cards.', {
   stage: z.string().describe('the stage/list name, e.g. "Ready for Sprint"'),
   assignee: z.string().optional().describe('person name, or "none" for unassigned only'),
-  scope: z.enum(['team', 'board']).optional().describe("'team' (default) = only cards assigned to your team; 'board' = the entire board, all teams + unassigned cards"),
-}, wrap('cards', a => ({ stage: a.stage, ...(a.assignee ? { assignee: a.assignee } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
+  department: DEPT,
+  scope: SCOPE,
+}, wrap('cards', a => ({ stage: a.stage, ...(a.assignee ? { assignee: a.assignee } : {}), ...reads(a) })))
 server.tool('roster_stage_stats', 'Stage usage over the board\'s WHOLE history (since 2026-06-06, all teams): per stage, distinct cards ever entered, median + p90 dwell hours (completed segments), and skip rate (share of forward moves that jumped past the stage). Aggregates only, no names. Optional department and client narrow it to matching cards. Use to judge whether a column is actually used and what "normal" dwell looks like.', {
   department: z.string().optional().describe('department, e.g. "Video Edit"; a family name such as "Design" covers its departments'),
   client: z.string().optional().describe('client name (partial OK)'),
@@ -81,7 +98,8 @@ server.tool('roster_clients', 'Client directory for dashboards: id, name, logo_u
   q: z.string().optional().describe('part of a client name'),
   active: z.boolean().optional().describe('true (default) = active clients only; false = every client'),
   scope: z.enum(['team', 'board']).optional().describe("'team' (default) = open_cards counts your team's cards; 'board' = the whole board"),
-}, wrap('clients', a => ({ ...(a.q ? { q: a.q } : {}), ...(typeof a.active === 'boolean' ? { active: a.active } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
+  department: DEPT,
+}, wrap('clients', a => ({ ...(a.q ? { q: a.q } : {}), ...(typeof a.active === 'boolean' ? { active: a.active } : {}), ...(a.scope ? { scope: a.scope } : {}), ...(a.department ? { department: a.department } : {}) })))
 server.tool('roster_meetings', 'Meetings from the Roster calendar. Without dates: 7 days back to 60 days ahead (Kuwait days). Each meeting: id, client, title, kind, status, start, end (Kuwait time, ISO), owner (organiser), attendees [{name, email, internal, response}], online, location_mode, minutes_status (none = no minutes, draft = written but not submitted, submitted = pushed to the calendar event), minutes_submitted_at, minutes_by, gemini_notes_url (the calendar event link, where Gemini notes attach; the Roster does not store Gemini notes). Default scope "team" = meetings your team organises or attends; scope "board" = every meeting.', {
   from: z.string().optional().describe('start date YYYY-MM-DD (needs to)'),
   to: z.string().optional().describe('end date YYYY-MM-DD, inclusive (needs from)'),
@@ -92,18 +110,19 @@ server.tool('roster_meetings', 'Meetings from the Roster calendar. Without dates
 server.tool('roster_readiness', 'Shoot readiness: every shoot in the next N days (default 7, up to 31) and what is still missing (plan, budget, models, props, call time). A 9:00 AM start is missing until someone confirms it. Company-wide, like roster_shoots.', { days: z.number().optional().describe('days ahead, default 7') }, wrap('readiness', a => (a.days ? { days: a.days } : {})))
 server.tool('roster_studio', 'Bricks Studio review feed — linked submissions with card/client, status, version, comments, client-view receipt, and open/share links. Optional text filter and team/board scope.', {
   q: z.string().optional().describe('optional filter by submission, card, or client name'),
-  scope: z.enum(['team', 'board']).optional().describe("'team' (default) = your team’s cards; 'board' = the whole board"),
-}, wrap('studio', a => ({ ...(a.q ? { q: a.q } : {}), ...(a.scope ? { scope: a.scope } : {}) })))
-server.tool('roster_client', 'Everything for one client — every card assigned to your team (live + done), who is on it, with open/done/overdue totals (team scope only)', { client: z.string().describe('client name (partial OK)') }, wrap('client', a => ({ client: a.client })))
+  scope: SCOPE,
+  department: DEPT,
+}, wrap('studio', a => ({ ...(a.q ? { q: a.q } : {}), ...reads(a) })))
+server.tool('roster_client', 'Everything for one client — every card assigned to your team (live + done), who is on it, with open/done/overdue totals (team scope only)' + DEPT_NOTE, { client: z.string().describe('client name (partial OK)'), department: DEPT }, wrap('client', a => ({ client: a.client, ...(a.department ? { department: a.department } : {}) })))
 server.tool('roster_scope', 'One client in one month: what the contract sold (Salesforce quote) vs what was shot, delivered to the client and approved in Studio, one entry per contract live in that month, plus special requests. Null means unknown and every null has a line in notes. No money is returned.', {
   client: z.string().describe('client name (partial OK)'),
   month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().describe('YYYY-MM, default this month'),
 }, wrap('scope', a => ({ client: a.client, ...(a.month ? { month: a.month } : {}) })))
-server.tool('roster_due', 'Your team\'s cards due soon — the next N days (default 7), soonest first (team scope only)', { days: z.number().optional().describe('days ahead, default 7') }, wrap('due', a => (a.days ? { days: a.days } : {})))
-server.tool('roster_done', 'Your team\'s recently completed cards — the last N days (default 14) (team scope only)', { days: z.number().optional().describe('days back, default 14') }, wrap('done', a => (a.days ? { days: a.days } : {})))
-server.tool('roster_blocked', 'Your team\'s blocked or stuck cards — explicit blockers, or overdue by 3+ days (team scope only)', {}, wrap('blocked'))
-server.tool('roster_recent', 'Recently touched cards across your team (default 20)', { n: z.number().optional().describe('how many, default 20') }, wrap('recent', a => (a.n ? { n: a.n } : {})))
-server.tool('roster_now', 'Live pulse — who is tracking now, what is due today, and the latest card moves', {}, wrap('now'))
+server.tool('roster_due', 'Your team\'s cards due soon — the next N days (default 7), soonest first (team scope only)' + DEPT_NOTE, { days: z.number().optional().describe('days ahead, default 7'), department: DEPT }, wrap('due', a => ({ ...(a.days ? { days: a.days } : {}), ...(a.department ? { department: a.department } : {}) })))
+server.tool('roster_done', 'Your team\'s recently completed cards — the last N days (default 14) (team scope only)' + DEPT_NOTE, { days: z.number().optional().describe('days back, default 14'), department: DEPT }, wrap('done', a => ({ ...(a.days ? { days: a.days } : {}), ...(a.department ? { department: a.department } : {}) })))
+server.tool('roster_blocked', 'Your team\'s blocked or stuck cards — explicit blockers, or overdue by 3+ days (team scope only)' + DEPT_NOTE, { department: DEPT }, wrap('blocked', a => (a.department ? { department: a.department } : {})))
+server.tool('roster_recent', 'Recently touched cards across your team (default 20)' + DEPT_NOTE, { n: z.number().optional().describe('how many, default 20'), department: DEPT }, wrap('recent', a => ({ ...(a.n ? { n: a.n } : {}), ...(a.department ? { department: a.department } : {}) })))
+server.tool('roster_now', 'Live pulse — who is tracking now, what is due today, and the latest card moves' + DEPT_NOTE, { department: DEPT }, wrap('now', a => (a.department ? { department: a.department } : {})))
 server.tool('roster_docs', 'Developer hub links and current key setup, permissions, limits and recovery guidance. Local help, no API request.', {}, async () => asText(developerGuide()))
 server.tool('roster_changelog', `Brello release history — what changed in every version of this CLI/MCP (installed: v${VERSION}). Answers "what's new?" without a network call.`, {}, async () => asText({ ok: true, installed: VERSION, releases: CHANGELOG }))
 server.tool('roster_ps_issues', 'Open Product Support issues (admin only)', {}, wrap('ps_issues'))
@@ -209,9 +228,11 @@ server.tool('studio_plans', `${STUDIO} List Creative Plans, most recently change
   limit: z.number().int().min(1).max(200).optional().describe('rows per page, default 50, max 200'),
   offset: z.number().int().min(0).optional().describe('skip this many rows'),
 }, studioWrap(a => callStudio('GET', '/api/agent/plans', { query: { q: a.q, client: a.client, status: a.status, scope: a.mine ? 'mine' : undefined, limit: a.limit, offset: a.offset } })))
-server.tool('studio_plan', `${STUDIO} One Creative Plan in full, with editable (the fields studio_plan_edit can change) and a Studio link. ${NO_CLIENT}`, {
+server.tool('studio_plan', `${STUDIO} One Creative Plan in full, with editable (the fields studio_plan_edit can change) and a Studio link. The edit trail and the version history are left out by default to keep the answer small. The response lists them in omitted with activityCount and historyCount, and include brings them back. ${NO_CLIENT}`, {
   id: z.string().describe('plan id or its first 8 characters'),
-}, studioWrap(a => callStudio('GET', `/api/agent/plans/${enc(a.id)}`)))
+  include: z.enum(['activity', 'history', 'activity,history', 'all', 'none']).optional().describe('"activity" adds the edit trail, "history" the version history, "all" both; default/"none" leaves both out'),
+  limit: z.number().int().min(1).optional().describe('rows per included section, default the newest 100'),
+}, studioWrap(a => callStudio('GET', `/api/agent/plans/${enc(a.id)}`, { query: { include: a.include === 'none' ? undefined : a.include, limit: a.limit } })))
 server.tool('studio_plan_edit', `${STUDIO} Change a Creative Plan: name, status (DRAFT or READY), shootDate, shootLocation, shootDuration, clientBrief. Pass only the fields to change; an empty string clears a text field. Needs the studio_plan permission on the key. ${NO_CLIENT}`, {
   id: z.string().describe('plan id or its first 8 characters'),
   name: z.string().optional().describe('new plan name'),

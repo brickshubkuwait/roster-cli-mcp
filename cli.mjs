@@ -142,6 +142,7 @@ const COMMANDS = {
   comments:    { q: 'comments' },
   reactions:   { q: 'reactions' },
   activity:    { q: 'activity' },
+  'card-activity': { q: 'card_activity', arg: '<card> [--include comments|activity] [--limit n]' },
   search:      { q: 'search', arg: '"<text>"' },
   user:        { q: 'user', arg: '<name>' },
   card:        { q: 'card', arg: '<id>' },
@@ -187,6 +188,8 @@ function wantsWrite(name, args) {
   return args.length > 0 && !isNumericArg(args[0])
 }
 const REASON_WRITES = new Set(['move', 'due', 'assign'])
+// One sentence about --department, reused by every read the gateway takes it on.
+const DEPT_HELP = ' --department "<name>" narrows it to one department ("Video Edit") or a whole family ("Video Post Production" = Video Edit + Reel Video Edit + Motion).'
 const CLI_HINTS = {
   DUE_REQUIRED: 'Set one first with  brello due <card> YYYY-MM-DD, then move it again',
   REASON_REQUIRED: 'Run it again with  --reason "<why>"',
@@ -504,18 +507,19 @@ const DETAIL = {
   keys: { sum: 'Sign in, use and renew your Brello key.', extra: KEY_GUIDE.join('\n\n') + '\n\nMy keys: ' + KEYS_URL },
   auth:        { sum: 'Sign in. Press Enter, sign in with your Bricks Google account and request access. An admin approves, your terminal is connected.', extra: `Need a key? Run brello auth and sign in with your Bricks Google account. The browser opens ${CONNECT_URL}; once an admin approves, this terminal saves the key to ~/.roster by itself. Approved once: after that your terminal reconnects on its own. Closed the terminal? Run brello auth again within 24 hours of the approval. Have a key from an admin? Type it at the same prompt.` },
   login:       { sum: 'Sign in from a pipe with a key from an admin, with no prompt.', extra: 'Reads the key from stdin, checks it, then saves it.  e.g.  pbpaste | brello login   Passing the key as an argument is not supported, so it never lands in your shell history. Everyone else runs brello auth.' },
-  stats:       { sum: 'A live dashboard for your whole team in one glance.', extra: 'No argument. Shows team size, open / done / overdue counts, what is due this week, cards with no due date, and how many people are tracking time right now.' },
+  stats:       { sum: 'A live dashboard for your whole team in one glance.', extra: 'No argument. Shows team size, open / done / overdue counts, what is due this week, cards with no due date, and how many people are tracking time right now.' + DEPT_HELP },
   team:        { sum: 'Your team members — names, departments and roles.', extra: 'No argument. A ● now marker means that person has a live Hubstaff timer.' },
-  overdue:     { sum: 'Cards that are past their due date and not yet done.', extra: 'No argument. Sorted oldest-first; the LATE column shows how many days each one has slipped.' },
-  workload:    { sum: 'How loaded each person is — open, overdue and done counts.', extra: 'No argument. Sorted by who has the most open cards; NEXT DUE is their soonest upcoming deadline.' },
+  overdue:     { sum: 'Cards that are past their due date and not yet done.', extra: 'No argument. Sorted oldest-first; the LATE column shows how many days each one has slipped.' + DEPT_HELP },
+  workload:    { sum: 'How loaded each person is — open, overdue and done counts.', extra: 'No argument. Sorted by who has the most open cards; NEXT DUE is their soonest upcoming deadline.' + DEPT_HELP },
   active:      { sum: 'Who is tracking time right this second (live Hubstaff timers).', extra: 'No argument. FOR is how long the timer has been running; SINCE is when it started.' },
-  comments:    { sum: 'The latest comments left on your team’s cards.', extra: 'No argument. Newest first. Mentions of hidden people are redacted to [hidden].' },
+  comments:    { sum: 'The latest comments left on your team’s cards.', extra: 'No argument. Newest first. Mentions of hidden people are redacted to [hidden]. --limit takes up to 200.' + DEPT_HELP },
   reactions:   { sum: 'Recent emoji reactions on your team’s cards.', extra: 'No argument. Newest first; only reactions left by your own team are shown.' },
-  activity:    { sum: 'A feed of everything that happened on your team’s cards.', extra: 'No argument. Moves between stages, comments, reassignments, splits and edits — newest first.' },
-  search:      { sum: 'Find cards by title or client name.', extra: 'Argument: the text to look for (quote it if it has spaces).  e.g.  brello search "reel"' },
+  activity:    { sum: 'A feed of everything that happened on your team’s cards.', extra: 'No argument. Moves between stages, comments, reassignments, splits and edits — newest first. --limit takes up to 300.' + DEPT_HELP },
+  'card-activity': { sum: 'One card’s comments and activity trail in one feed.', extra: 'Argument: a card id (the first 8 characters are enough). Newest first, comments and the trail together. --include comments or --include activity keeps one kind; --limit takes up to 400 (default 80). Mentions of hidden people are redacted to [hidden].  e.g.  brello card-activity 1c11685c --include comments' },
+  search:      { sum: 'Find cards by title or client name.', extra: 'Argument: the text to look for (quote it if it has spaces).' + DEPT_HELP + '  e.g.  brello search "reel"' },
   user:        { sum: 'A full dossier for one person — every card they own.', extra: 'Argument: a name (full or partial).  Shows live AND archived cards, their totals, and what they are tracking now.  e.g.  brello user Samer' },
   card:        { sum: 'Everything about a single card.', extra: 'Argument: a card id (the first 8 characters are enough). Shows workflow, tracked effort, Studio submissions, review context, Slack thread, deliverable sizes and approved EN/AR copy. Self-service keys omit share/open URLs, invoices and delivery recipients. e.g. brello card 1c11685c' },
-  stages:      { sum: 'The board’s workflow stages and how full each one is.', extra: 'No argument. CARDS = your team’s open cards in that stage; OVERDUE = how many of those are late.' },
+  stages:      { sum: 'The board’s workflow stages and how full each one is.', extra: 'No argument. CARDS = your team’s open cards in that stage; OVERDUE = how many of those are late.' + DEPT_HELP },
   departments: { sum: 'The roster’s departments and their headcount.', extra: 'No argument. ACTIVE NOW = how many people in each department are tracking time.' },
   shoots:      { sum: 'The shoot schedule, recent and upcoming (company-wide).', extra: 'With no flags: the last 7 days onward. --from YYYY-MM-DD --to YYYY-MM-DD (both together) sets a range. Filters: --client "<name>" (partial), --type "<shoot type>", --status <Confirmed|Pending|Canceled...>. --include-removed adds removed shoots with when and why. --json returns every field: id, code, client_id, account, contract_month, extended, session (2 of 4), scope, outputs (what the session is for, with quantities), models and models_arranged, prep (props, casting, wardrobe, setup, permit), drone_pilot, production_assistant, end_time, reel times, completed, feedback_session, jida_project_id, created_at, updated_at, removed_at, removed_reason. Money and HR fields are never returned. Each shoot also carries a readiness line (what is still missing).  e.g.  brello shoots --from 2026-10-01 --to 2026-10-31 --client Foodhall' },
   meetings:    { sum: 'Meetings with owner, attendees and minutes status.', extra: 'With no flags: 7 days back to 60 days ahead. --from YYYY-MM-DD --to YYYY-MM-DD, --client "<name>", --owner "<name>". Shows meetings your team organises or attends; --board shows the whole board. MINUTES is none, draft or submitted. The notes link opens the calendar event, where Gemini notes attach; the Roster does not store Gemini notes.  e.g.  brello meetings --from 2026-10-01 --to 2026-10-31 --owner Melani' },
@@ -533,14 +537,15 @@ const DETAIL = {
     '  brello studio upload <id> <file...> [--label "<option label>"] [--option-of <versionId>]',
     '  brello studio status <id> <approve|changes|clear> [--note "<text>"] [--version-id <id>]',
     '  brello studio plans ["<filter>"] [--client "<name>"] [--status DRAFT|READY] [--mine] [--limit n]',
-    '  brello studio plan <id> [--set field=value ...]      fields: name, status, shootDate, shootLocation, shootDuration, clientBrief',
+    '  brello studio plan <id> [--include activity,history|all|none] [--limit n]   the edit trail and version history are left out by default',
+    '  brello studio plan <id> --set field=value ...        fields: name, status, shootDate, shootLocation, shootDuration, clientBrief',
     '  brello studio clients ["<filter>"] [--all]',
     '  brello studio items <client id or name> ["<filter>"] [--plans]',
     '  brello studio whoami                                 your Studio account and the Studio permissions on your key',
     'Ids can be the first 8 characters. Reads work on every key. Comment, upload, status and plan changes need the matching Studio permission on your key, granted by an admin when approving your brello auth request. Comments are team comments and the client never sees them; uploads start hidden from the client; status is the internal review only. Sending to a client, share links, client approval and delete stay in Studio.',
   ].join('\n  ') },
   scope:       { sum: 'One client in one month: what the contract sold vs what was shot, delivered and approved.', extra: 'Argument: a client name (full or partial), then --month YYYY-MM (default: this month). One block per contract live in that month. CONTRACTED comes from the Salesforce quote, SHOT from completed shoot days, DELIVERED from cards sent to the client or completed, APPROVED from client approvals in Bricks Studio. ? means the number is unknown, and the notes under the table say why. Add --json for the raw response.  e.g.  brello scope "Sedra" --month 2026-10' },
-  client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).  e.g.  brello client Foodhall' },
+  client:      { sum: 'All of your team’s cards for one client.', extra: 'Argument: a client name (full or partial).' + DEPT_HELP + '  e.g.  brello client Foodhall' },
   due:         { sum: 'Cards coming due soon — or set one card’s due date.', extra: 'With a number (or nothing): your team’s cards due in the next N days (default 7).  With a card id/name + a date: sets that card’s due date; pass "clear" to remove it. Moving a missed due date later needs  --reason "<why>"  (REASON_REQUIRED).  e.g.  brello due 3   ·   brello due 1c11685c 2026-07-20 --reason "client moved the shoot"' },
   done:        { sum: 'Cards your team finished recently — or mark one done.', extra: 'With a number (or nothing): cards completed in the last N days (default 14).  With a card id/name: marks that card done; add --undo to reopen it.  e.g.  brello done 14   ·   brello done 1c11685c' },
   create:      { sum: 'Create a new card on the board.', extra: 'Argument: the card title in quotes. Everything else is an optional value flag: --list "<stage>" (default: the board’s first list), --assignee <name|id>, --due YYYY-MM-DD, --client "<tag>", --dept <department>, --priority <top|high|medium|low>, --desc "<brief>".  e.g.  brello create "Spirit Felice Bahrain artwork" --assignee Abrar --due 2026-07-22 --dept Design' },
@@ -551,9 +556,9 @@ const DETAIL = {
   rename:      { sum: 'Rename a card.', extra: 'Arguments: a card (id or exact name) then the new title.  e.g.  brello rename 1c11685c New title' },
   describe:    { sum: 'Set a card’s description.', extra: 'Arguments: a card (id or exact name) then the description text.  e.g.  brello describe 1c11685c "the full brief"' },
   archive:     { sum: 'Archive a card — or restore it.', extra: 'Unavailable to self-service keys. Requires an administrator-issued key with archive access. Argument: a card (id or exact name). Add --restore to bring it back.  e.g.  brello archive 1c11685c' },
-  blocked:     { sum: 'Cards that are stuck waiting on something else.', extra: 'No argument. Shows what each card is blocked by.' },
-  recent:      { sum: 'The newest cards and changes across your team.', extra: 'No argument. A quick "what’s new" since you last looked.' },
-  now:         { sum: 'A live snapshot of who is working on what right now.', extra: 'No argument. Like active, focused on the current moment.' },
+  blocked:     { sum: 'Cards that are stuck waiting on something else.', extra: 'No argument. Shows what each card is blocked by.' + DEPT_HELP },
+  recent:      { sum: 'The newest cards and changes across your team.', extra: 'No argument. A quick "what’s new" since you last looked.' + DEPT_HELP },
+  now:         { sum: 'A live snapshot of who is working on what right now.', extra: 'No argument. Like active, focused on the current moment.' + DEPT_HELP },
   'ps-issues': { sum: 'Open Product Support issues (admin only).', extra: 'No argument. Requires an admin-scope token.' },
   audit:       { sum: 'The access log — who queried what, and when (admin only).', extra: 'No argument. Requires an admin-scope token.' },
 }
@@ -566,6 +571,7 @@ const LEGENDS = {
   comments:    'BY = author · AT = when it was posted',
   reactions:   'BY = who reacted · AT = when',
   activity:    'DID = what happened · WHO = who did it · WHEN = timestamp',
+  'card-activity': 'TYPE = comment or activity · BY = who · WHAT = the comment or the change · AT = when',
   search:      'STAGE = board list · DUE = due date · DONE = ✓ complete',
   user:        'STATUS = live / done / archived · STARTED→ENDED→DONE = work timeline',
   stages:      'CARDS = open cards here · OVERDUE = how many are late',
@@ -593,6 +599,7 @@ const EMPTY_HINTS = {
   comments: 'no comments yet on your team’s cards',
   reactions:'no reactions yet',
   activity: 'no recent activity',
+  'card-activity': 'nothing on that card yet — no comments and no activity',
   blocked:  'nothing is blocked right now',
   due:      'nothing due in that window',
   done:     'nothing completed in that window',
@@ -641,7 +648,7 @@ function help() {
       ['changelog', '', "What's new — every release"],
     ] },
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'departments'] },
-    { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'clients', 'scope', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'comments', 'reactions'] },
+    { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'clients', 'scope', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'card-activity', 'comments', 'reactions'] },
     { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'meetings', 'readiness', 'studio'] },
     { title: 'Act on cards', rows: [
       ['create', '"<title>" [flags]', 'Create a new card (--assignee --due --client --dept --priority --list)'],
@@ -663,7 +670,7 @@ function help() {
       ['studio upload', '<id> <file...>', 'Upload a new version (--label --option-of)'],
       ['studio status', '<id> <approve|changes|clear>', 'Set the internal review status (--note --version-id)'],
       ['studio plans', '["<filter>"] [flags]', 'Creative Plans (--client --status --mine --limit)'],
-      ['studio plan', '<id> [--set f=v]', 'Read a plan, or change name, status, shoot date and more'],
+      ['studio plan', '<id> [--include all]', 'Read a plan (--include activity,history --limit n), or --set to change it'],
       ['studio clients', '["<filter>"] [--all]', 'Studio clients with submission, plan and item counts'],
       ['studio items', '<client> ["<filter>"]', "A client's items catalog (--plans adds items from plans)"],
       ['studio whoami', '', 'Your Studio account and the Studio permissions on your key'],
@@ -741,6 +748,21 @@ const VALUE_FLAGS = {
   meetings: ['from', 'to', 'client', 'owner'],
   'stage-stats': ['department', 'dept', 'client'],
   cards: ['client', 'offset', 'limit', 'created-after', 'created-before'],
+  'card-activity': ['include', 'limit'],
+}
+// Reads the gateway narrows by department — one department ("Video Edit") or a
+// whole family ("Video Post Production"). stage-stats has its own pair above.
+const DEPT_READS = new Set(['stats', 'overdue', 'workload', 'comments', 'activity', 'card-activity',
+  'search', 'cards', 'stages', 'due', 'done', 'blocked', 'recent', 'now', 'client', 'clients', 'studio'])
+// Server page caps for --limit. cards keeps its own --limit/--offset pair below.
+const LIMIT_CAPS = { comments: 200, activity: 300, 'card-activity': 400 }
+for (const name of DEPT_READS) {
+  const list = (VALUE_FLAGS[name] ||= [])
+  for (const f of ['department', 'dept']) if (!list.includes(f)) list.push(f)
+}
+for (const name of Object.keys(LIMIT_CAPS)) {
+  const list = (VALUE_FLAGS[name] ||= [])
+  if (!list.includes('limit')) list.push('limit')
 }
 const opts = {}
 for (const name of VALUE_FLAGS[cmd] || []) {
@@ -782,6 +804,29 @@ if (!def) { console.error(`I don't know "${cmd}".`); help(); process.exit(1) }
 
 const params = {}
 if (flags.has('--board')) params.scope = 'board'
+// --department "<name>" (or --dept): a department or a whole family. The gateway
+// resolves the name and answers with the list of names it knows if it cannot.
+if (DEPT_READS.has(cmd)) {
+  const d = opts.department ?? opts.dept
+  if (d !== undefined) {
+    if (!String(d).trim()) { console.error(`--department takes a department or a family, e.g.   brello ${cmd} --department "Video Post Production"`); process.exit(1) }
+    params.department = String(d).trim()
+  }
+}
+if (LIMIT_CAPS[cmd] !== undefined && opts.limit !== undefined) {
+  const n = Number(opts.limit)
+  if (!Number.isInteger(n) || n < 1 || n > LIMIT_CAPS[cmd]) { console.error(`--limit takes a whole number from 1 to ${LIMIT_CAPS[cmd]}, e.g.   brello ${cmd} --limit ${LIMIT_CAPS[cmd]}`); process.exit(1) }
+  params.limit = n
+}
+if (def.q === 'card_activity') {
+  params.id = (args[0] || '').trim()
+  if (!params.id) { console.error('Add a card id (first 8 chars are fine), e.g.   brello card-activity 1c11685c'); process.exit(1) }
+  if (opts.include !== undefined) {
+    const v = String(opts.include).trim().toLowerCase()
+    if (!/^(comments?|activity)$/.test(v)) { console.error('--include takes comments or activity. Leave it off for both, e.g.   brello card-activity 1c11685c --include comments'); process.exit(1) }
+    params.include = v
+  }
+}
 if (def.q === 'cards') {
   if (args.length) params.stage = args.join(' ').trim()
   if (flags.has('--unassigned')) params.assignee = 'none'
@@ -892,6 +937,13 @@ try {
     if (r.active_on) console.log(`  ${c.amber('● tracking now')}${c.dim(' → ')}${r.active_on}`)
     console.log('  ' + c.dim('─'.repeat(Math.max(12, vlen(`❯ ${p.name}`) + 6))))
     console.log('')
+  } else if (r.card && typeof r.card === 'object') {
+    // card-activity: name the card the feed belongs to before the rows.
+    const k = r.card
+    const sub = [k.client, k.stage, k.assignee].filter(Boolean).join(' · ')
+    console.log(`\n${c.cyan('❯')} ${c.bold(k.title || k.id)}${c.dim('  ' + k.id)}`)
+    if (sub) console.log('  ' + c.dim(sub))
+    console.log(c.dim(`  ${r.count} entr${r.count === 1 ? 'y' : 'ies'} · newest first`) + '\n')
   } else if (r.client) {
     const t = r.totals || {}
     console.log(`\n${c.cyan('❯')} ${c.bold(r.client)}${c.dim('  client')}`)

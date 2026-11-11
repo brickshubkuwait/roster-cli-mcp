@@ -55,9 +55,10 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 | `brello overdue` | Cards past their due date and not done |
 | `brello workload` | Open + overdue cards per person |
 | `brello active` | Who's tracking time right now (live Hubstaff) |
-| `brello comments` | Recent comments on your team's cards |
+| `brello comments` | Recent comments on your team's cards; `--limit` up to 200 |
 | `brello reactions` | Recent emoji reactions on your team's cards |
-| `brello activity` | Card history — moves (stage→stage), comments, splits, edits |
+| `brello activity` | Card history — moves (stage→stage), comments, splits, edits; `--limit` up to 300 |
+| `brello card-activity <id>` | One card's comments and activity trail in one feed, newest first; `--include comments\|activity`, `--limit` up to 400 |
 | `brello search "<text>"` | Find cards by title or client |
 | `brello user <name>` | Everything for one person — every card, live AND archived, with their open/done/archived totals + what they're tracking now |
 | `brello card <id>` | Every field on a card — workflow, Studio, Salesforce, send/view receipt, Slack thread, sizes and copy |
@@ -77,6 +78,14 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 | `brello meetings` | Meetings with owner, attendees and minutes status; `--from`/`--to`, `--client`, `--owner` |
 | `brello clients ["<name>"]` | Client directory with Instagram handle, logo and open cards; `--all` adds archived clients |
 | `brello readiness [--days 7] [--json]` | Upcoming shoots and what is still missing: plan, budget, models, props, call time |
+
+`--department "<name>"` narrows a read to one department (`Video Edit`) or a whole family (`Video Post Production` covers Video Edit, Reel Video Edit and Motion). It works on `stats`, `workload`, `overdue`, `comments`, `activity`, `card-activity`, `search`, `cards`, `stages`, `due`, `done`, `blocked`, `recent`, `now`, `client`, `clients`, `studio` and `stage-stats`.
+
+```bash
+brello workload --department "Video Post Production"
+brello activity --department "Video Edit" --limit 100
+brello card-activity 1c11685c --include comments
+```
 
 Run `brello help` to see them all. Full reference: [QUERIES.md](./QUERIES.md).
 
@@ -105,7 +114,7 @@ Bricks Studio works from the same key: submissions, review comments, versions, C
 | `brello studio upload <id> <file...>` | Upload a new version from images (jpg, png, webp, gif, heic) or a video (mp4, mov, webm), not both at once. It starts hidden from the client; `--label "<option label>"` and `--option-of <versionId>` add it as an option |
 | `brello studio status <id> <approve\|changes\|clear>` | Set the internal review status; `--note "<text>"`, `--version-id <id>`. The client's own verdict is never set here |
 | `brello studio plans ["<filter>"]` | Creative Plans; `--client "<name>"`, `--status DRAFT\|READY`, `--mine`, `--limit n` |
-| `brello studio plan <id>` | One plan in full and the fields you can change |
+| `brello studio plan <id>` | One plan in full and the fields you can change. The edit trail and version history are left out by default (the response says so); `--include activity,history` or `--include all` brings them back, `--limit n` sets how many rows |
 | `brello studio plan <id> --set field=value` | Change a plan: `name`, `status`, `shootDate`, `shootLocation`, `shootDuration`, `clientBrief`. `--set` repeats, e.g. `--set name="Eid shoot" --set status=READY` |
 | `brello studio clients ["<filter>"]` | Studio clients with submission, plan and item counts; `--all` adds inactive clients |
 | `brello studio items <client id or name> ["<filter>"]` | A client's items catalog; `--plans` adds items named on the client's plans |
