@@ -24,6 +24,7 @@ What each command returns.
 | `stage-stats` | Per stage over the board's history: cards entered, median and p90 dwell hours, skip rate. `--department "<name>"` and `--client "<name>"` narrow it to matching cards. |
 | `shoots` | The whole shoot schedule, company-wide, each shoot with a readiness line. Without dates: the last 7 days onward. See [Shoots](#shoots). |
 | `meetings` | Meetings with owner, attendees and minutes status. See [Meetings](#meetings). |
+| `meeting <id>` | One meeting with the minutes as they were written, and its action items. See [Meetings](#meetings). |
 | `clients ["<name>"]` | The client directory. See [Clients](#clients). |
 | `readiness` | Shoots in the next `days` (default 7, up to 31) with what is still missing: plan, budget, models, props, call time. |
 
@@ -54,9 +55,9 @@ Add `--json` to any command for machine output: the raw JSON response on stdout,
 
 ## Meetings
 
-`brello meetings [--from YYYY-MM-DD --to YYYY-MM-DD] [--client "<name>"] [--owner "<name>"] [--board]`
+`brello meetings [--from YYYY-MM-DD --to YYYY-MM-DD] [--client "<name>"] [--owner "<name>"] [--limit n] [--board]`
 
-Without dates: 7 days back to 60 days ahead. Shows meetings your team organises or attends; `--board` shows every meeting when your key has the whole board. Claude uses `roster_meetings`.
+Without dates: 7 days back to 60 days ahead. `--since` and `--until` say the same thing as `--from` and `--to`. `--limit` takes up to 500. Shows meetings your team organises or attends; `--board` shows every meeting when your key has the whole board. Claude uses `roster_meetings`.
 
 | Field | What it is |
 |---|---|
@@ -65,9 +66,28 @@ Without dates: 7 days back to 60 days ahead. Shows meetings your team organises 
 | `owner` | The organiser |
 | `attendees` | `name`, `email`, `internal` (a Bricks person) and `response` |
 | `online` · `location_mode` | Online, at Bricks, elsewhere or by phone |
-| `minutes_status` | `none` (no minutes), `draft` (written, not submitted) or `submitted` |
+| `minutes_status` · `has_minutes` | `none` (no minutes), `draft` (written, not submitted) or `submitted`, and the plain boolean behind it |
 | `minutes_submitted_at` · `minutes_by` | When the minutes were submitted and who wrote them |
 | `gemini_notes_url` | The calendar event link, where Gemini notes attach. The Roster does not store Gemini notes. |
+| `link` | The meeting's page in the Roster |
+
+### One meeting, with the minutes
+
+`brello meeting <id> [--board]`
+
+`meetings` says *which* meetings have minutes; `meeting` says *what they say*. The id or its first 8 characters works. Claude uses `roster_meeting`. A meeting outside your scope answers with no data and a note, the same way `card` does.
+
+| Field | What it is |
+|---|---|
+| everything above | The same meeting row |
+| `agenda` · `location` | What the meeting was called for, and where |
+| `minutes` | The minutes body exactly as it was written, `null` when there are none |
+| `minutes_updated_at` | When they were last edited |
+| `action_items` | `id`, `text`, `owner`, `due`, `done`, `done_at` and `card` (the first 8 characters of the Brello card it became), in the order they were written |
+| `action_items_open` | How many are still open |
+| `cards` | The Brello cards linked to the meeting |
+
+People you cannot see are taken out of the notes and the action items, the same redaction `comments` uses.
 
 ## Clients
 

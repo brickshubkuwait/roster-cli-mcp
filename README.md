@@ -75,7 +75,8 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 | `brello cards ["<stage>"]` | Every card in a stage or matching filters; `--history` adds each card's stage history; `--created-after` / `--created-before YYYY-MM-DD`; 200 a page, `--limit` up to 1000 and `--offset` for the next page |
 | `brello stage-stats` | Stage usage over the board's history; `--department` and `--client` narrow it |
 | `brello shoots` | The company-wide shoot schedule; `--from`/`--to`, `--client`, `--type`, `--status`, `--include-removed`; each shoot has a readiness line |
-| `brello meetings` | Meetings with owner, attendees and minutes status; `--from`/`--to`, `--client`, `--owner` |
+| `brello meetings` | Meetings with owner, attendees and minutes status; `--from`/`--to` (or `--since`/`--until`), `--client`, `--owner`, `--limit` |
+| `brello meeting <id>` | One meeting with the minutes as they were written, and its action items |
 | `brello clients ["<name>"]` | Client directory with Instagram handle, logo and open cards; `--all` adds archived clients |
 | `brello readiness [--days 7] [--json]` | Upcoming shoots and what is still missing: plan, budget, models, props, call time |
 
@@ -85,6 +86,7 @@ Claude can use the `roster_docs` tool for the same links and key guidance, witho
 brello workload --department "Video Post Production"
 brello activity --department "Video Edit" --limit 100
 brello card-activity 1c11685c --include comments
+brello meeting 844acd8c
 ```
 
 Run `brello help` to see them all. Full reference: [QUERIES.md](./QUERIES.md).
@@ -94,6 +96,7 @@ Add `--json` to any command for scripts: the raw JSON response, with no banner a
 ```bash
 brello shoots --from 2026-10-01 --to 2026-10-31 --client Foodhall --json
 brello meetings --owner Melani --json
+brello meeting 844acd8c --json
 brello clients --json
 ```
 

@@ -82,7 +82,8 @@ ok(stats.count > 0 && stats.scope === 'board' && stats.data.every(s => 'cards_en
 // 7b) 1.11.0 reads. Tools must be registered; live checks run once the
 // roster-query deploy that serves them is out (an older gateway answers
 // "unknown query", which is reported as pending, not failed).
-for (const t of ['roster_meetings', 'roster_clients']) ok(!!byName[t], `${t} is registered`)
+for (const t of ['roster_meetings', 'roster_meeting', 'roster_clients']) ok(!!byName[t], `${t} is registered`)
+ok(!!byName.roster_meeting?.inputSchema?.properties?.id, 'roster_meeting takes a meeting id')
 ok(!!byName.roster_shoots?.inputSchema?.properties?.from && !!byName.roster_cards?.inputSchema?.properties?.history, 'roster_shoots takes from/to, roster_cards takes history')
 const raw = async (name, args = {}) => (await client.callTool({ name, arguments: args })).content[0].text
 const pending = (text) => /unknown query/i.test(text)
@@ -91,6 +92,23 @@ if (pending(meetingsText)) console.log('  · roster_meetings: gateway not deploy
 else {
   const m = JSON.parse(meetingsText.replace(/\nNotice: .*$/, ''))
   ok(Array.isArray(m.data) && m.data.every(x => ['none', 'draft', 'submitted'].includes(x.minutes_status) && Array.isArray(x.attendees)), `roster_meetings: ${m.count} meetings with minutes_status + attendees`)
+  // 1.17.0: has_minutes agrees with minutes_status, and every row links back.
+  if (m.data.length && 'has_minutes' in m.data[0]) {
+    ok(m.data.every(x => x.has_minutes === (x.minutes_status !== 'none') && (x.link === null || /\/meeting\//.test(x.link))), 'roster_meetings rows carry has_minutes and a link')
+    // One meeting in full. Counts change daily, so this asserts shape, never a number.
+    const withMinutes = m.data.find(x => x.has_minutes) || m.data[0]
+    if (withMinutes) {
+      const oneText = await raw('roster_meeting', { id: String(withMinutes.id).slice(0, 8) })
+      if (pending(oneText)) console.log('  · roster_meeting: gateway not deployed yet, live check pending')
+      else {
+        const one = JSON.parse(oneText.replace(/\nNotice: .*$/, ''))
+        ok(one.data?.id === withMinutes.id && Array.isArray(one.data.action_items) && 'minutes' in one.data,
+          `roster_meeting ${String(withMinutes.id).slice(0, 8)}: minutes + ${one.data?.action_items?.length ?? 0} action items`)
+        ok(withMinutes.has_minutes ? typeof one.data.minutes === 'string' && one.data.minutes.length > 0 : one.data.minutes === null,
+          'the minutes body is there when has_minutes says so, and null when it does not')
+      }
+    }
+  } else console.log('  · roster_meetings: has_minutes pending the gateway deploy')
 }
 const sh = await call('roster_shoots')
 ok(Array.isArray(sh.data) && sh.data.every(x => 'date' in x && 'client' in x), `roster_shoots default window: ${sh.count} shoots`)

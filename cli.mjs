@@ -2,7 +2,8 @@
 // Brello CLI — query your team's work.
 //   brello auth   (one time, or  pbpaste | brello login)   then:
 //   brello stats | team | overdue | workload | active
-//   brello comments | reactions | search "<text>" | card <id> | shoots | meetings | readiness | help
+//   brello comments | reactions | search "<text>" | card <id> | shoots | readiness | help
+//   brello meetings | meeting <id>   (the minutes and the action items)
 //   Add --json to any command for machine output (raw JSON, no banner, no colour).
 import { callRoster, QUERIES, clearToken, getToken, ensureRosterDir, describeError, isLegacyKey, CONNECT_URL } from './lib/client.mjs'
 import { printNotice, printLegacyHint } from './lib/auth.mjs'
@@ -159,6 +160,7 @@ const COMMANDS = {
   departments: { q: 'departments' },
   shoots:      { q: 'shoots', arg: '[--from YYYY-MM-DD --to YYYY-MM-DD] [flags]' },
   meetings:    { q: 'meetings', arg: '[--from YYYY-MM-DD --to YYYY-MM-DD] [flags]' },
+  meeting:     { q: 'meeting', arg: '<id>' },
   clients:     { q: 'clients', arg: '["<name>"] [--all]' },
   readiness:   { q: 'readiness', arg: '[--days 7] [--json]' },
   studio:      { q: 'studio', arg: '[filter]' },
@@ -476,6 +478,35 @@ function displayRows(q, rows) {
   return rows
 }
 
+// One meeting reads as a page, not a key/value list: the minutes are prose and
+// the action items are a table. --json still returns the response untouched.
+function renderMeeting(r) {
+  const m = r.data
+  if (!m) { console.log(emptyLine('meeting')); if (r.note) console.log(c.dim('  ' + r.note)); return }
+  const when = String(m.start || '').slice(0, 16).replace('T', ' ')
+  const sub = [m.client, when, m.owner, m.online ? 'online' : m.location || m.location_mode].filter(Boolean).join(' · ')
+  console.log(`  ${c.dim('┃ ')}${c.bold(m.title || 'Meeting')}${c.dim('  ' + String(m.id).slice(0, 8))}`)
+  if (sub) console.log(`  ${c.dim('┃ ')}${c.dim(sub)}`)
+  const guests = (m.attendees || []).map(a => a.name).filter(Boolean)
+  if (guests.length) console.log(`  ${c.dim('┃ ')}${c.dim('with ' + guests.join(', '))}`)
+  if (m.agenda) console.log(`  ${c.dim('┃ ')}${c.dim('agenda: ')}${m.agenda}`)
+  console.log('')
+  const by = m.minutes_by ? ' by ' + m.minutes_by : ''
+  if (m.minutes) {
+    console.log('  ' + c.bold(c.cyan('MINUTES')) + c.dim(`  ${m.minutes_status}${by}`))
+    for (const line of String(m.minutes).split('\n')) console.log('    ' + line)
+  } else {
+    console.log('  ' + c.bold(c.cyan('MINUTES')) + c.dim('  none written yet'))
+  }
+  console.log('')
+  console.log('  ' + c.bold(c.cyan('ACTION ITEMS')) + c.dim(`  ${m.action_items_open ?? 0} still open`))
+  table((m.action_items || []).map(a => ({
+    item: a.text, owner: a.owner || '', due: a.due || '', done: a.done ? '✓' : '', card: a.card || '',
+  })), 'meeting')
+  if (m.link) console.log('\n  ' + c.dim('↗ ') + link(m.link, 'open in the Roster'))
+  if (m.gemini_notes_url) console.log('  ' + c.dim('↗ ') + link(m.gemini_notes_url, 'the calendar event'))
+}
+
 function printObject(o) {
   // Left-bar key/value list (used for stats + a single card) instead of raw JSON.
   if (o == null) { console.log(c.dim('  · nothing here right now')); return }
@@ -522,7 +553,8 @@ const DETAIL = {
   stages:      { sum: 'The board’s workflow stages and how full each one is.', extra: 'No argument. CARDS = your team’s open cards in that stage; OVERDUE = how many of those are late.' + DEPT_HELP },
   departments: { sum: 'The roster’s departments and their headcount.', extra: 'No argument. ACTIVE NOW = how many people in each department are tracking time.' },
   shoots:      { sum: 'The shoot schedule, recent and upcoming (company-wide).', extra: 'With no flags: the last 7 days onward. --from YYYY-MM-DD --to YYYY-MM-DD (both together) sets a range. Filters: --client "<name>" (partial), --type "<shoot type>", --status <Confirmed|Pending|Canceled...>. --include-removed adds removed shoots with when and why. --json returns every field: id, code, client_id, account, contract_month, extended, session (2 of 4), scope, outputs (what the session is for, with quantities), models and models_arranged, prep (props, casting, wardrobe, setup, permit), drone_pilot, production_assistant, end_time, reel times, completed, feedback_session, jida_project_id, created_at, updated_at, removed_at, removed_reason. Money and HR fields are never returned. Each shoot also carries a readiness line (what is still missing).  e.g.  brello shoots --from 2026-10-01 --to 2026-10-31 --client Foodhall' },
-  meetings:    { sum: 'Meetings with owner, attendees and minutes status.', extra: 'With no flags: 7 days back to 60 days ahead. --from YYYY-MM-DD --to YYYY-MM-DD, --client "<name>", --owner "<name>". Shows meetings your team organises or attends; --board shows the whole board. MINUTES is none, draft or submitted. The notes link opens the calendar event, where Gemini notes attach; the Roster does not store Gemini notes.  e.g.  brello meetings --from 2026-10-01 --to 2026-10-31 --owner Melani' },
+  meetings:    { sum: 'Meetings with owner, attendees and minutes status.', extra: 'With no flags: 7 days back to 60 days ahead. --from YYYY-MM-DD --to YYYY-MM-DD (or --since and --until), --client "<name>", --owner "<name>", --limit up to 500. Shows meetings your team organises or attends; --board shows the whole board. MINUTES is none, draft or submitted; brello meeting <id> reads the minutes themselves. The notes link opens the calendar event, where Gemini notes attach; the Roster does not store Gemini notes.  e.g.  brello meetings --from 2026-10-01 --to 2026-10-31 --owner Melani' },
+  meeting:     { sum: 'One meeting with the minutes as they were written.', extra: 'Argument: a meeting id (the first 8 characters are enough; brello meetings lists them). Shows the agenda, the minutes in full, and the action items with their owner, due date and the card each one became. People you cannot see are taken out of the notes the same way they are on brello comments.  e.g.  brello meeting 844acd8c' },
   clients:     { sum: 'The client directory: logo, Instagram handle and open cards.', extra: 'Optional argument: part of a client name. Active clients only unless you add --all. OPEN CARDS counts cards in your team (--board for the whole board). --json adds the logo URL, industry, account people and ids.  e.g.  brello clients food --json' },
   cards:       { sum: 'Every card in a stage, or matching your filters.', extra: 'Optional argument: a stage name. --board for the whole board, --unassigned for cards with no assignee, --client "<name>" to narrow by client, --history to add each card’s stage history (stage, entered and exited), --created-after / --created-before YYYY-MM-DD for cards made in a date range (Kuwait days). Returns 200 cards a page by default: --limit up to 1000, and --offset N for the next page (the response says which offset is next).  e.g.  brello cards "Ready for Sprint" --board --history   ·   brello cards --board --created-after 2026-10-01 --limit 1000' },
   'stage-stats': { sum: 'How each stage is used over the board’s history.', extra: 'No argument needed. --department "<name>" and --client "<name>" narrow it to matching cards; a family such as Design covers its departments.  e.g.  brello stage-stats --department "Video Edit"' },
@@ -578,6 +610,7 @@ const LEGENDS = {
   departments: 'PEOPLE = headcount · ACTIVE NOW = tracking time',
   shoots:      'TIME = start time · CREW = who’s on it · ACCOUNT = account owner · MONTH = contract month · MODELS = models needed (✓ = arranged) · READINESS = what is still missing',
   meetings:    'START = Kuwait time · OWNER = organiser · MINUTES = none / draft / submitted',
+  meeting:     'DUE = when the action item is due · OWNER = who holds it · CARD = the Brello card it became',
   clients:     'HANDLE = Instagram handle · OPEN CARDS = in your card scope · LOGO = has a logo',
   cards:       'STAGE = board list · HISTORY = stages it passed through, oldest first',
   readiness:   'IN = days until the shoot · MISSING = plan, budget, models, props or call time not settled yet',
@@ -608,6 +641,7 @@ const EMPTY_HINTS = {
   studio:   'nothing in the Studio review feed',
   shoots:   'no shoots scheduled in that range',
   meetings: 'no meetings in that range',
+  meeting:  'no action items were written for this meeting',
   clients:  'no clients matched that name',
   readiness:'no shoots in that window',
 }
@@ -649,7 +683,7 @@ function help() {
     ] },
     { title: 'Your team',        cmds: ['stats', 'team', 'now', 'workload', 'overdue', 'active', 'departments'] },
     { title: 'Cards & people',   cmds: ['search', 'user', 'client', 'clients', 'scope', 'card', 'due', 'done', 'blocked', 'recent', 'activity', 'card-activity', 'comments', 'reactions'] },
-    { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'meetings', 'readiness', 'studio'] },
+    { title: 'Board & production', cmds: ['stages', 'cards', 'stage-stats', 'shoots', 'meetings', 'meeting', 'readiness', 'studio'] },
     { title: 'Act on cards', rows: [
       ['create', '"<title>" [flags]', 'Create a new card (--assignee --due --client --dept --priority --list)'],
       ['comment', '<card> <text>', 'Add a comment to a card'],
@@ -745,7 +779,7 @@ for (let i = 0; i < rest.length; i++) {
 // Taken out of `rest` first so their values never read as positional args.
 const VALUE_FLAGS = {
   shoots: ['from', 'to', 'client', 'type', 'status'],
-  meetings: ['from', 'to', 'client', 'owner'],
+  meetings: ['from', 'to', 'since', 'until', 'client', 'owner', 'limit'],
   'stage-stats': ['department', 'dept', 'client'],
   cards: ['client', 'offset', 'limit', 'created-after', 'created-before'],
   'card-activity': ['include', 'limit'],
@@ -755,7 +789,7 @@ const VALUE_FLAGS = {
 const DEPT_READS = new Set(['stats', 'overdue', 'workload', 'comments', 'activity', 'card-activity',
   'search', 'cards', 'stages', 'due', 'done', 'blocked', 'recent', 'now', 'client', 'clients', 'studio'])
 // Server page caps for --limit. cards keeps its own --limit/--offset pair below.
-const LIMIT_CAPS = { comments: 200, activity: 300, 'card-activity': 400 }
+const LIMIT_CAPS = { comments: 200, activity: 300, 'card-activity': 400, meetings: 500 }
 for (const name of DEPT_READS) {
   const list = (VALUE_FLAGS[name] ||= [])
   for (const f of ['department', 'dept']) if (!list.includes(f)) list.push(f)
@@ -844,7 +878,13 @@ if (def.q === 'cards') {
     params[k] = n
   }
 }
+if (def.q === 'meeting') {
+  params.id = (args[0] || '').trim()
+  if (!params.id) { console.error('Add a meeting id (first 8 chars are fine), e.g.   brello meeting 844acd8c   ·   brello meetings lists them'); process.exit(1) }
+}
 if (def.q === 'shoots' || def.q === 'meetings') {
+  // --since / --until read better out loud; the gateway takes either pair.
+  for (const [plain, dated] of [['since', 'from'], ['until', 'to']]) if (opts[plain] && !opts[dated]) opts[dated] = opts[plain]
   for (const k of ['from', 'to', 'client', 'type', 'status', 'owner']) if (opts[k]) params[k] = opts[k].trim()
   if ((params.from && !params.to) || (params.to && !params.from)) {
     console.error(`Give both dates, e.g.   brello ${cmd} --from 2026-10-01 --to 2026-10-31`)
@@ -955,7 +995,9 @@ try {
     console.log(`\n${c.cyan('❯')} ${c.bold(cmd)}${c.dim(` · ${r.count} result${r.count === 1 ? '' : 's'}`)}`)
     console.log('  ' + c.dim('─'.repeat(vlen(head))) + '\n')
   }
-  if (Array.isArray(r.data)) {
+  if (def.q === 'meeting') {
+    renderMeeting(r)
+  } else if (Array.isArray(r.data)) {
     table(humanRows(cmd, displayRows(def.q, r.data)), cmd)
     const leg = legendFor(cmd)
     if (leg && r.data.length && typeof r.data[0] === 'object' && Object.keys(r.data[0]).length >= 4) {
