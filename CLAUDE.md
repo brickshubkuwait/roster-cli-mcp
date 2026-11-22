@@ -37,13 +37,6 @@ repo. Backend changes happen THERE; this repo is the client.
   from `brello auth` (an admin approves); never paste a key into a config file or doc.
 - Counts change daily — assert invariants (board >= team), never fixed numbers.
 
-## Ecosystem map (added 22 Nov 2026)
-
-- Thin client. Every `roster_*` call goes to the `roster-query` edge function in `brickshubkuwait/bricks-roster` (Supabase `sfmdwoxlyvajiutdmqok`, shared with Bakora); `studio_*` tools go to Bricks Studio `/api/agent` routes with the caller's key. The hosted twin is the `roster-mcp` edge function (claude.ai custom connector).
-- Keys: `brello auth` signs in at `roster.bricks.com.kw/connect`; an admin approves at `/admin/keys`; keys live in `roster_tokens` with depts, capabilities and exclusions.
-- No CI. `npm publish` is the release; a push to `main` deploys nothing.
-- Pointer: see `~/Documents/GitHub/ECOSYSTEM.md` and `~/Documents/GitHub/ecosystem-kb/roster-brello.md`.
-
 ## Ecosystem (added 22 Nov 2026)
 
 This repo is public. Keep internal architecture notes in the private bricks-roster `CLAUDE.md` (section "Ecosystem"), not here. Public facts only: the CLI and MCP call the `roster-query` endpoint and, for `brello studio`, Bricks Studio's agent routes, with the key from `brello auth`. Cross-repo map for maintainers: `~/Documents/GitHub/ECOSYSTEM.md` on the maintainer's machine.
